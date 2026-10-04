@@ -1,0 +1,742 @@
+/*
+ * 파얼끄투 P1.0.7 - 게임 내부 UI 현대화 1차
+ * 대상: 로비 중심
+ * 기능/크기 구조는 유지하고 색상, 여백, 테두리, 그림자, hover 표현만 현대화한다.
+ */
+
+:root{
+	--pe-surface: rgba(250, 252, 248, 0.97);
+	--pe-surface-2: #F1F5EE;
+	--pe-surface-3: #E8EFE4;
+	--pe-border: #CCD8C7;
+	--pe-border-soft: #DDE6D9;
+	--pe-text: #293327;
+	--pe-sub: #6B7568;
+	--pe-green: #5E9850;
+	--pe-green-dark: #46773B;
+	--pe-blue: #5D94D3;
+	--pe-red: #C95F5F;
+	--pe-shadow: 0 4px 12px rgba(32, 52, 28, 0.14);
+	--pe-shadow-hover: 0 7px 17px rgba(32, 52, 28, 0.18);
+}
+
+/* ===== 로비 상단 버튼 ===== */
+.kkutu-menu{
+	/* 원본 30px 레이아웃 유지 */
+	height: 30px;
+	padding-top: 0;
+}
+
+.kkutu-menu button{
+	box-sizing: border-box;
+	width: 96px;
+	height: 24px;
+	margin: 0 2px;
+	padding: 2px 7px;
+	border: 1px solid rgba(0, 0, 0, 0.10) !important;
+	border-radius: 8px !important;
+	color: #253025 !important;
+	box-shadow: 0 2px 5px rgba(0,0,0,.10);
+	font-size: 12px;
+	font-weight: 700;
+	transition:
+		transform 140ms ease,
+		box-shadow 140ms ease,
+		filter 140ms ease,
+		background-color 140ms ease;
+}
+
+.kkutu-menu button:hover{
+	margin-top: 0 !important;
+	height: 24px !important;
+	transform: translateY(-2px);
+	filter: brightness(1.04);
+	box-shadow: 0 4px 8px rgba(0,0,0,.14);
+}
+
+.kkutu-menu button:active{
+	transform: translateY(0);
+	box-shadow: 0 1px 3px rgba(0,0,0,.12);
+}
+
+.kkutu-menu .tiny-menu{
+	width: 28px !important;
+	padding-left: 0;
+	padding-right: 0;
+}
+
+.kkutu-menu .toggled{
+	margin-top: 0 !important;
+	color: #FFF !important;
+	background-color: #475248 !important;
+}
+
+#HelpBtn,
+#SettingBtn{
+	background-color: #E9EEE7 !important;
+}
+
+#CommunityBtn{
+	background-color: #EDE7F6 !important;
+}
+
+#NewRoomBtn{
+	background-color: #68A2DD !important;
+	color: #FFF !important;
+}
+
+#QuickRoomBtn{
+	background-color: #8AB5DF !important;
+}
+
+#ShopBtn{
+	background-color: #9CCDA1 !important;
+}
+
+#DictionaryBtn{
+	background-color: #70B879 !important;
+	color: #FFF !important;
+}
+
+#ReplayBtn{
+	background-color: #D2E8A0 !important;
+}
+
+#LeaderboardBtn{
+	background-color: #E8B5CC !important;
+}
+
+/* ===== 로비 패널 공통 ===== */
+.RoomListBox,
+.UserListBox,
+.MeBox,
+.ChatBox{
+	/*
+	 * 중요:
+	 * 원본 KKuTu 로비는 UserListBox 200px + RoomListBox 790px에
+	 * Product 기본 좌우 padding 10px이 더해져 정확히 1010px을 사용한다.
+	 * 여기서 border를 추가하면 합계가 1010px을 넘어 방 목록이 다음 줄로 밀린다.
+	 * 따라서 실제 border 대신 레이아웃 크기에 영향을 주지 않는 inset shadow를 사용한다.
+	 */
+	border: 0 !important;
+	border-radius: 12px !important;
+	color: var(--pe-text);
+	box-shadow:
+		inset 0 0 0 1px var(--pe-border),
+		var(--pe-shadow) !important;
+	background: var(--pe-surface) !important;
+	overflow: visible;
+}
+
+.RoomListBox .product-title,
+.UserListBox .product-title,
+.MeBox .product-title,
+.ChatBox .product-title{
+	/*
+	 * 원본 title 높이를 크게 바꾸지 않는다.
+	 * body가 고정 높이를 사용하므로 title을 키우면 전체 내부 배치가 어긋날 수 있다.
+	 */
+	box-sizing: content-box;
+	min-height: 0;
+	padding: 3px;
+	border: 0;
+	border-bottom: 1px solid var(--pe-border-soft);
+	border-radius: 7px 7px 3px 3px;
+	color: #334230;
+	background: linear-gradient(180deg, #F7FAF5, #EDF3EA);
+	font-weight: 700;
+}
+
+.RoomListBox .product-title i,
+.UserListBox .product-title i,
+.MeBox .product-title i,
+.ChatBox .product-title i{
+	color: var(--pe-green-dark);
+}
+
+.RoomListBox .product-body,
+.UserListBox .product-body,
+.MeBox .product-body,
+.ChatBox .product-body{
+	background: transparent;
+}
+
+/* ===== 방 목록 ===== */
+.rooms-item{
+	border: 1px solid #D5DED1;
+	border-radius: 12px !important;
+	background: #FFFFFF !important;
+	box-shadow: 0 2px 5px rgba(43, 63, 38, .10) !important;
+	transition:
+		transform 150ms ease,
+		box-shadow 150ms ease,
+		border-color 150ms ease,
+		background-color 150ms ease !important;
+}
+
+.rooms-item:hover{
+	transform: translateY(-2px);
+	border-color: #AFC7A6;
+	background: #FBFDF9 !important;
+	box-shadow: var(--pe-shadow-hover) !important;
+}
+
+.rooms-create{
+	border-color: #A8C8E8;
+	background: linear-gradient(135deg, #EAF4FC, #D7EAF9) !important;
+	color: #285D89;
+}
+
+.rooms-create:hover{
+	background: linear-gradient(135deg, #E1F0FB, #CFE6F8) !important;
+}
+
+.rooms-gaming{
+	border-color: #E6BBBB;
+	background: #FFF1F1 !important;
+}
+
+.rooms-gaming:hover{
+	background: #FFE9E9 !important;
+}
+
+.rooms-number{
+	color: #55764C;
+	font-weight: 800;
+	border-right-color: #D9E1D5 !important;
+}
+
+.rooms-title{
+	color: #263326;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.rooms-mode,
+.rooms-info{
+	color: var(--pe-sub);
+}
+
+.rooms-limit{
+	color: #667463;
+	font-weight: 700;
+}
+
+.rooms-lock{
+	color: #A36B52;
+}
+
+.rooms-channel{
+	box-shadow: 0 0 0 2px rgba(255,255,255,.85);
+}
+
+/* ===== 접속자 목록 ===== */
+.users-item{
+	box-sizing: border-box;
+	min-height: 23px;
+	padding: 2px 3px;
+	border-radius: 7px;
+	margin-bottom: 2px;
+	transition: background-color 120ms ease, transform 120ms ease;
+}
+
+.users-item:hover{
+	background-color: #EDF4E9 !important;
+	transform: translateX(2px);
+}
+
+.users-name{
+	color: #334032;
+}
+
+.users-image,
+.users-level{
+	border-radius: 5px;
+}
+
+/* ===== 내 정보 ===== */
+.MeBox{
+	transition: transform 160ms ease, box-shadow 160ms ease;
+}
+
+.MeBox:hover{
+	transform: translateY(-1px);
+	box-shadow: var(--pe-shadow-hover) !important;
+}
+
+.my-image{
+	border-radius: 12px;
+}
+
+.my-stat-name{
+	color: #2E3C2D;
+}
+
+.my-stat-record,
+.my-stat-ping,
+.my-level{
+	color: #677264;
+}
+
+.my-okg,
+.my-gauge{
+	box-shadow: inset 0 0 0 1px rgba(255,255,255,.10);
+}
+
+/* ===== 채팅 ===== */
+.ChatBox{
+	margin-top: 7px;
+}
+
+#Chat{
+	box-sizing: border-box;
+	padding: 5px 7px;
+	scrollbar-width: thin;
+	scrollbar-color: #AAB8A5 transparent;
+}
+
+.chat-item{
+	box-sizing: border-box;
+	padding: 3px 4px;
+	border-radius: 6px;
+}
+
+.chat-item:hover{
+	background: rgba(238, 244, 235, .85);
+}
+
+.chat-notice{
+	background-color: #EEF2F7 !important;
+}
+
+.chat-stamp{
+	color: #99A099 !important;
+}
+
+.chat-head{
+	color: #405C3A;
+	border-radius: 5px;
+}
+
+.chat-head:hover{
+	background-color: #EAF1E6 !important;
+}
+
+.chat-body{
+	color: #354034;
+}
+
+#Talk{
+	box-sizing: border-box;
+	height: 30px;
+	padding: 5px 10px;
+	border: 1px solid #BFCBBC;
+	border-right: 0;
+	border-radius: 9px 0 0 9px;
+	background: #FFF;
+	color: #293327;
+	box-shadow: inset 0 1px 2px rgba(0,0,0,.04);
+}
+
+#Talk:focus{
+	border-color: #78A96D;
+	box-shadow: 0 0 0 2px rgba(94, 152, 80, .14);
+}
+
+#ChatBtn{
+	box-sizing: border-box;
+	height: 30px;
+	border: 1px solid var(--pe-green-dark);
+	border-left: 0;
+	border-radius: 0 9px 9px 0;
+	color: #FFF;
+	background: var(--pe-green);
+	font-weight: 700;
+}
+
+#ChatBtn:hover{
+	background: #68A45A;
+}
+
+/* ===== 다이얼로그 ===== */
+.dialog{
+	border: 1px solid #C7D2C3;
+	border-radius: 14px !important;
+	box-shadow: 0 14px 32px rgba(25, 38, 22, .28) !important;
+	background: #FDFEFC !important;
+}
+
+.dialog-head{
+	box-sizing: border-box;
+	min-height: 23px;
+	padding: 5px 7px !important;
+	border: 0 !important;
+	border-bottom: 1px solid #DCE4D8 !important;
+	border-radius: 9px 9px 4px 4px !important;
+	color: #334131 !important;
+	background: #EEF3EB !important;
+	font-weight: 700;
+}
+
+.dialog .closeBtn{
+	border: 0;
+	border-radius: 50% !important;
+	box-shadow: none;
+}
+
+.dialog-bar input,
+.dialog-bar select{
+	border-color: #BCC8B8;
+	background: #FFF;
+}
+
+.tail-button button{
+	border: 1px solid #B8C5B5;
+	border-radius: 7px;
+	background: #EEF3EB;
+	font-weight: 700;
+}
+
+.tail-button button:hover{
+	background: #E3ECE0;
+}
+
+/* ===== 스크롤바 ===== */
+.RoomListBox .product-body::-webkit-scrollbar,
+.UserListBox .product-body::-webkit-scrollbar,
+#Chat::-webkit-scrollbar{
+	width: 8px;
+}
+
+.RoomListBox .product-body::-webkit-scrollbar-thumb,
+.UserListBox .product-body::-webkit-scrollbar-thumb,
+#Chat::-webkit-scrollbar-thumb{
+	border: 2px solid transparent;
+	border-radius: 8px;
+	background: #AAB8A5;
+	background-clip: padding-box;
+}
+
+.RoomListBox .product-body::-webkit-scrollbar-track,
+.UserListBox .product-body::-webkit-scrollbar-track,
+#Chat::-webkit-scrollbar-track{
+	background: transparent;
+}
+
+/* 모바일에서는 과한 hover 이동 효과 제거 */
+@media (max-width: 720px){
+	.kkutu-menu button:hover,
+	.rooms-item:hover,
+	.MeBox:hover{
+		transform: none;
+	}
+
+	.kkutu-menu button{
+		font-size: 11px;
+	}
+}
+
+
+/* =========================================================
+ * P1.0.7 로비 위치 왜곡 핫픽스 2
+ * 원본 KKuTu의 폭/높이/패딩/마진/float을 강제로 보존한다.
+ * 현대화는 색상/그림자/테두리 색/둥근 모서리 위주로만 적용.
+ * ========================================================= */
+
+/* 상단 메뉴: 원본 기하 구조 복원 */
+.kkutu-menu{
+	float: left;
+	width: 1010px;
+	height: 30px;
+	padding-top: 0;
+}
+.kkutu-menu button{
+	float: left;
+	width: 100px;
+	height: 20px;
+	margin: 0;
+	padding: 0;
+	box-sizing: content-box;
+}
+.kkutu-menu button:hover{
+	margin-top: -5px !important;
+	height: 25px !important;
+	transform: none;
+}
+.kkutu-menu .toggled{
+	margin-top: 5px !important;
+	transform: none;
+}
+.kkutu-menu .tiny-menu{
+	width: 20px !important;
+	padding: 0;
+}
+
+/* 주요 Product: 실제 border가 레이아웃 폭에 더해지지 않게 유지 */
+.RoomListBox,
+.UserListBox,
+.MeBox,
+.ChatBox{
+	border: 0 !important;
+	box-sizing: content-box;
+}
+
+/* 원본 패널 크기 강제 복원 */
+.UserListBox{
+	width: 200px;
+	height: 360px;
+}
+.UserListBox .product-body{
+	width: 190px;
+	height: 330px;
+	padding: 5px 5px 0 5px;
+}
+
+.RoomListBox{
+	width: 790px;
+	height: 360px;
+}
+.RoomListBox .product-body{
+	width: 780px;
+	height: 330px;
+	padding: 5px 5px 0 5px;
+}
+
+.MeBox{
+	width: 200px;
+	height: 190px;
+}
+.ChatBox{
+	width: 1000px;
+	margin-top: 0;
+}
+
+/* 타이틀: 원본 12px 높이/3px 패딩 유지 */
+.RoomListBox .product-title,
+.UserListBox .product-title,
+.MeBox .product-title,
+.ChatBox .product-title{
+	box-sizing: content-box;
+	height: 12px;
+	min-height: 0;
+	padding: 3px;
+	margin-bottom: 5px;
+	border-width: 0 0 1px 0;
+}
+
+/* 방 카드: 원본 2열 계산이 깨지지 않도록 실제 border 제거 */
+.rooms-item{
+	box-sizing: content-box;
+	width: 364px;
+	height: 64px;
+	padding: 5px;
+	margin: 3px;
+	border: 0 !important;
+	/* 시각적 테두리는 레이아웃에 영향 없는 inset shadow로 대체 */
+	box-shadow:
+		inset 0 0 0 1px #D5DED1,
+		0 2px 5px rgba(43, 63, 38, .10) !important;
+}
+.rooms-item:hover{
+	transform: none;
+	box-shadow:
+		inset 0 0 0 1px #AFC7A6,
+		0 4px 10px rgba(43, 63, 38, .14) !important;
+}
+
+/* 접속자 행: 원본 폭/높이 흐름 유지 */
+.users-item{
+	width: 190px;
+	min-height: 0;
+	padding: 0;
+	margin-bottom: 0;
+	box-sizing: content-box;
+}
+.users-item:hover{
+	transform: none;
+}
+
+/* 채팅: 원본 입력창/버튼 기하 구조 복원 */
+#Talk{
+	float: left;
+	box-sizing: content-box;
+	margin-top: 5px;
+	width: calc(100% - 82px);
+	height: 20px;
+	padding: 0;
+	border-right: none;
+	border-top-right-radius: 0;
+	border-bottom-right-radius: 0;
+	border-top-left-radius: 7px;
+	border-bottom-left-radius: 7px;
+}
+#ChatBtn{
+	float: left;
+	box-sizing: content-box;
+	margin-top: 5px;
+	width: 60px;
+	height: 20px;
+	padding: 0;
+	border-left: none;
+	border-top-left-radius: 0;
+	border-bottom-left-radius: 0;
+	border-top-right-radius: 7px;
+	border-bottom-right-radius: 7px;
+}
+
+/* 다이얼로그: 타이틀/닫기 버튼의 원본 좌표계 복원 */
+.dialog{
+	border: 0 !important;
+	box-sizing: content-box;
+}
+.dialog-head{
+	box-sizing: content-box;
+	padding: 3px !important;
+	margin-bottom: 5px;
+	height: 12px;
+	min-height: 0;
+	border-width: 0 0 1px 0 !important;
+	border-radius: 5px !important;
+	font-size: 11px;
+}
+.dialog .closeBtn{
+	float: right;
+	box-sizing: content-box;
+	margin-top: 1px;
+	width: 12px;
+	height: 12px;
+	padding: 0;
+	border: 0;
+	border-radius: 6px !important;
+}
+
+/* 다이얼로그 입력 요소: 원본 높이 유지 */
+.dialog-bar input,
+.dialog-bar select{
+	float: left;
+	width: 187px;
+	height: 14px;
+	padding: 0;
+	box-sizing: inherit;
+}
+
+/* 하단 버튼도 원본 크기 유지 */
+.tail-button{
+	margin-top: 7px;
+}
+.tail-button button{
+	float: right;
+	margin-right: 5px;
+	width: 80px;
+	height: 20px;
+	padding: 0;
+	box-sizing: content-box;
+}
+
+
+/* =========================================================
+ * P1.0.7 대화창 입력/선택 컨트롤 크기 수정
+ * select의 화살표와 number의 증감 화살표가 너무 작게 보이던 문제 수정.
+ * ========================================================= */
+
+/* 대화창 안의 텍스트/숫자/선택 입력은 26px 높이로 통일 */
+.dialog-bar input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]),
+.dialog-bar select{
+	float: left;
+	width: 187px;
+	height: 26px;
+	min-height: 26px;
+	padding: 2px 7px;
+	box-sizing: border-box;
+	outline: none;
+	border: 1px solid #B9C8B4;
+	border-radius: 7px;
+	background-color: #FFFFFF;
+	color: #182118;
+	font-size: 14px;
+	line-height: 20px;
+	appearance: auto;
+	-webkit-appearance: auto;
+}
+
+/* 숫자 입력의 브라우저 기본 증감 버튼은 숨기지 않는다 */
+.dialog-bar input[type="number"]{
+	appearance: auto;
+	-webkit-appearance: auto;
+	padding-right: 2px;
+}
+
+/* select 기본 화살표도 브라우저 기본 크기를 사용 */
+.dialog-bar select{
+	padding-right: 4px;
+	cursor: pointer;
+}
+
+/* 라벨과 컨트롤의 세로 중심 맞춤 */
+.dialog-bar{
+	min-height: 26px;
+}
+.dialog-bar h4{
+	box-sizing: border-box;
+	min-height: 26px;
+	padding-top: 5px;
+	line-height: 16px;
+}
+
+/* 일반 대화창 버튼도 입력 컨트롤과 비슷한 높이로 확대 */
+.dialog-bar button{
+	min-height: 26px;
+	box-sizing: border-box;
+	border-radius: 7px;
+}
+
+/* 하단 확인/저장 버튼 */
+.tail-button button{
+	width: 80px;
+	height: 28px;
+	min-height: 28px;
+	padding: 2px 8px;
+	box-sizing: border-box;
+}
+
+/* 방 만들기 옵션 영역은 체크박스 자체 크기만 적당히 키움 */
+#RoomDiag input[type="checkbox"],
+#RoomDiag input[type="radio"]{
+	width: 15px;
+	height: 15px;
+	vertical-align: middle;
+}
+
+/* 설명 박스는 기존 정보량을 유지하면서 폼 높이 증가분만 보정 */
+#RoomDiag .dialog-bar[style*="height: 50px"]{
+	height: 55px !important;
+}
+
+/* 사운드 설정의 range는 별도 높이로 유지 */
+#SettingDiag input[type="range"]{
+	height: 18px;
+	min-height: 18px;
+	padding: 0;
+}
+
+/* 파일 선택 버튼은 기존 커스텀 줄 안에서 조금 크게 */
+#personal-lobby-bgm-select,
+#personal-lobby-bgm-reset{
+	height: 26px !important;
+	min-height: 26px;
+}
+
+/* 모바일에서도 손가락으로 누르기 쉬운 최소 크기 */
+@media (max-width: 720px){
+	.dialog-bar input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]),
+	.dialog-bar select{
+		height: 28px;
+		min-height: 28px;
+		font-size: 15px;
+	}
+	.dialog-bar button,
+	.tail-button button{
+		min-height: 28px;
+	}
+}

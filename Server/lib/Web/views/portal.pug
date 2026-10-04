@@ -21,23 +21,23 @@ block Subject
 
 block CSS
 	link(rel='stylesheet', href='/css/in_game_kkutu.css')
+	link(rel='stylesheet', href='/css/in_portal.css')
 
 block Middle
+	span#portal-authenticated(style='display: none;')= locals.authenticated ? '1' : ((locals.session && locals.session.profile) ? '1' : '0')
+	span#login-required(style='display: none;')= locals.loginRequired ? '1' : '0'
 	+separator(5)
 	div(style='float: left; width: 100%;')
 		div(style='float: left; padding-left: 70px;')
 			h3#holder= L('title').replace(/\[.+?\]/g, "")
 			img#logo(src='/img/kkutu/short_logo.png')
-		div#menu-bar(style='float: right; margin-top: 25px;')
-			a(target='_blank', href='//cafe.naver.com/sdbx', style='background-color: #63A95B;')= L('sandbox')
-			a(target='_blank', href='//blog.jjo.kr/', style='background-color: #4078DC;')= L('CREATOR')
 		div.jjoriping(style='margin-top: 40px;')
 			img.jjoObj.jjoEyeL(src='/img/jjoeyeL.png', style='left: -270px;')
 			img.jjoObj.jjoNose(src='/img/jjonose.png', style='left: -170px;')
 			img.jjoObj.jjoEyeR(src='/img/jjoeyeR.png', style='left: -70px;')
 			div.jjoDisplayBar(style='width: 325px; height: 85px;')
-				button#game-start.jjo-display= L('gameStart')
-	div(style='float: right; margin-top: -120px; width: 50%;')
+				button#game-start.jjo-display(type='button')= L('gameStart')
+	div.portal-side(style='float: right; margin-top: -120px; width: 50%;')
 		div.server-list-box
 			h3.server-list-title
 				a#server-refresh
@@ -46,8 +46,24 @@ block Middle
 				label= L('serverList')
 				label#server-total(style='color: #AAA; font-size: 13px;')
 			div#server-list
+		div.portal-link-grid
+			a.portal-main-link.link-terms(href='/tos.html#terms') 이용약관
+			a.portal-main-link.link-privacy(href='/tos.html#privacy') 개인정보<br>처리방침
+			a.portal-main-link.link-policy(href='javascript:void(0)', title='운영 정책 주소 미설정') 운영 정책
+			a.portal-main-link.link-punish(href='javascript:void(0)', title='처벌 내역 주소 미설정') 처벌 내역
+			a.portal-main-link.link-copyright(href='/legal/copyright') 저작권 안내
+			a.portal-main-link.link-wordsource(href='/legal/word-sources') 단어 출처 안내
+			a.portal-main-link.link-update(href='#kkutu-bulletin') 업데이트
+			a.portal-main-link.link-discord(href='javascript:void(0)', title='디스코드 주소 미설정') 디스코드
 	div(style='float: left; width: calc(100% - 4px); border: 2px solid #CCC; margin-top: 10px; background-color: #EEE;')
 		iframe#kkutu-bulletin(width='100%', height='400px', src='/kkutu_bulletin.html')
+	div.partner-section
+		h3.partner-section-title 파트너
+		div#partner-carousel.partner-carousel
+			a.partner-slide(href='https://site.kkutugame.kr', target='_blank', rel='noopener noreferrer', aria-label='끄투커넥트')
+				img(src='/img/partner/1.png', alt='끄투커넥트 파트너 배너')
+			a.partner-slide(href='https://kkutugame.kr', target='_blank', rel='noopener noreferrer', aria-label='끄투게임즈코리아')
+				img(src='/img/partner/2.png', alt='끄투게임즈코리아 파트너 배너')
 	+separator(10)
 
 block Bottom

@@ -325,7 +325,9 @@ exports.Client = function(socket, profile, sid){
 			o.data = my.data;
 			o.money = my.money;
 			o.equip = my.equip;
+			o.nickname = my.nickname;
 			o.exordial = my.exordial;
+			o.requireNickname = my.requireNickname === true;
 		}
 		return o;
 	};
@@ -403,6 +405,29 @@ exports.Client = function(socket, profile, sid){
 			my.flush(my.box, my.equip);
 		}
 	};
+	my.updateProfile = function(profile){
+		profile = profile || {};
+
+		if(profile.nickname && my.profile){
+			my.nickname = profile.nickname;
+			my.profile.nickname = profile.nickname;
+			my.profile.title = profile.nickname;
+			my.profile.name = profile.nickname;
+		}
+		if(profile.exordial !== undefined){
+			my.exordial = profile.exordial;
+			if(my.profile) my.profile.exordial = profile.exordial;
+		}
+
+		var payload = { id: my.id, profile: my.profile, nickname: my.nickname, exordial: my.exordial };
+		exports.publish('updateUser', payload);
+
+		if(Cluster.isMaster && CHAN){
+			for(var ch in CHAN){
+				CHAN[ch].send({ type: 'broadcast', event: 'updateUser', data: payload });
+			}
+		}
+	};
 	my.refresh = function(){
 		var R = new Lizard.Tail();
 		
@@ -420,7 +445,10 @@ exports.Client = function(socket, profile, sid){
 			const blockedUntil = (first || !$user.blockedUntil) ? null : $user.blockedUntil;
 			/* Enhanced User Block System [E] */
 
-			if(first) $user = { money: 0 };
+			if(first) $user = { nickname: my.profile.title || my.profile.name || "닉네임 없음", money: 0 };
+			// 기존 계정에는 이 필드가 없으므로 팝업이 뜨지 않는다.
+			// 새로 생성되는 계정만 최초 닉네임 설정을 요구한다.
+			my.requireNickname = first ? true : ($user.requireNickname === true);
 			if(black == "null") black = false;
 			if(black == "chat"){
 				black = false;
@@ -441,7 +469,14 @@ exports.Client = function(socket, profile, sid){
 					}
 				}
 			}*/
+			my.nickname = $user.nickname || (my.profile && (my.profile.title || my.profile.name)) || "닉네임 없음";
 			my.exordial = $user.exordial || "";
+			if(my.profile){
+				my.profile.nickname = my.nickname;
+				my.profile.title = my.nickname;
+				my.profile.name = my.nickname;
+				my.profile.exordial = my.exordial;
+			}
 			my.equip = $user.equip || {};
 			my.box = $user.box || {};
 			my.data = new exports.Data($user.kkutu);
@@ -474,6 +509,7 @@ exports.Client = function(socket, profile, sid){
 		DB.users.upsert([ '_id', my.id ]).set(
 			!isNaN(my.money) ? [ 'money', my.money ] : undefined,
 			(my.data && !isNaN(my.data.score)) ? [ 'kkutu', my.data ] : undefined,
+			(my.requireNickname !== undefined) ? [ 'requireNickname', my.requireNickname === true ] : undefined,
 			box ? [ 'box', my.box ] : undefined,
 			equip ? [ 'equip', my.equip ] : undefined,
 			friends ? [ 'friends', my.friends ] : undefined
@@ -530,8 +566,18 @@ exports.Client = function(socket, profile, sid){
 				return my.sendError(409);
 			}
 			if(Cluster.isMaster){
-				my.send('preRoom', { id: $room.id, pw: room.password, channel: $room.channel });
-				CHAN[$room.channel].send({ type: "room-reserve", session: sid, room: room, spec: spec, pass: pass });
+				// 443 단일 게이트웨이에서는 브라우저의 Room WS 재접속이 매우 빨라
+				// worker가 RESERVED를 만들기 전에 접속하는 race가 날 수 있다.
+				// worker의 room-reserved ACK를 받은 뒤 preRoom을 보내도록 한다.
+				CHAN[$room.channel].send({
+					type: "room-reserve",
+					session: sid,
+					room: room,
+					spec: spec,
+					pass: pass,
+					target: my.id,
+					preRoom: { id: $room.id, pw: room.password, channel: $room.channel }
+				});
 				
 				$room = undefined;
 			}else{
@@ -561,8 +607,15 @@ exports.Client = function(socket, profile, sid){
 				
 				room.id = _rid;
 				room._create = true;
-				my.send('preRoom', { id: _rid, channel: av });
-				CHAN[av].send({ type: "room-reserve", create: true, session: sid, room: room });
+				// worker가 예약을 실제로 등록한 뒤에만 클라이언트를 Room WS로 보낸다.
+				CHAN[av].send({
+					type: "room-reserve",
+					create: true,
+					session: sid,
+					room: room,
+					target: my.id,
+					preRoom: { id: _rid, channel: av }
+				});
 				
 				do{
 					if(++_rid > 999) _rid = 100;
@@ -1208,6 +1261,16 @@ exports.Room = function(room, channel){
 			rw = getRewards(my.mode, o.game.score / res[i].dim, o.game.bonus, res[i].rank, rl, sumScore);
 			rw.playTime = now - o.playAt;
 			o.applyEquipOptions(rw); // 착용 아이템 보너스 적용
+			// KKuTu-N과 동일하게 언노운 워드는 최종 보상을 제한한다.
+			if(my.opts.unknown){
+				if(rw.score > 100) rw.score = 100;
+				if(rw.money > 10) rw.money = 10;
+			}
+			// 바보 모드는 게임 내 점수와 별개로 경험치/핑 보상은 항상 0이다.
+			if(Const.GAME_TYPE[my.mode] == "XBB"){
+				rw.score = 0;
+				rw.money = 0;
+			}
 			if(rw.together){
 				if(o.game.wpc) o.game.wpc.forEach(function(item){ o.obtain("$WPC" + item, 1); }); // 글자 조각 획득 처리
 				o.onOKG(rw.playTime);
@@ -1261,7 +1324,7 @@ exports.Room = function(room, channel){
 		if(target) obj.target = target;
 		if(kickVote) obj.kickVote = kickVote;
 		if(spec && my.gaming){
-			if(my.rule.rule == "Classic"){
+			if(my.rule.rule == "Classic" || my.rule.rule == "Free"){
 				if(my.game.chain) obj.chain = my.game.chain.length;
 			}else if(my.rule.rule == "Jaqwi"){
 				obj.theme = my.game.theme;

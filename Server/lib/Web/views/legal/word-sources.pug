@@ -1,0 +1,100 @@
+//- 파얼끄투 Legal Page
+include ../module
+
+doctype html
+html
+	head
+		meta(charset='utf-8')
+		meta(name='viewport', content='width=device-width, initial-scale=1.0')
+		title 단어 데이터 출처 안내 - 파얼끄투
+		link(rel='stylesheet', href='/css/style.css')
+		link(rel='stylesheet', href='/css/fa.css')
+		link(rel='stylesheet', href='/css/expl.css')
+		style.
+			.legal-wrap { float:left; width:calc(100% - 24px); margin:12px; padding-bottom:30px; font-family:'Malgun Gothic','Dotum',sans-serif; color:#333; }
+			.legal-head { padding:16px 18px; margin-bottom:10px; background:rgba(255,255,255,.96); border:2px solid #CCC; border-radius:10px; box-shadow:0 2px 3px rgba(0,0,0,.08); }
+			.legal-head h1 { margin:0; color:#4F7D3B; font-size:23px; }
+			.legal-head p { margin:7px 0 0; color:#777; font-size:12px; }
+			.legal-tabs { margin-bottom:10px; border-bottom:2px solid #609447; }
+			.legal-tabs a { display:inline-block; margin-right:4px; padding:8px 14px; background:linear-gradient(#F8FBF5,#DFEAD8); border:1px solid #91A982; border-bottom:0; border-radius:8px 8px 0 0; color:#536A48; text-decoration:none; font-size:12px; font-weight:bold; }
+			.legal-tabs a:hover { background:#EDF5E8; }
+			.legal-tabs a.active { background:#659D49; border-color:#527E3D; color:#FFF; }
+			.legal-box { margin-bottom:10px; padding:17px 18px; background:rgba(255,255,255,.97); border:2px solid #CCC; border-radius:10px; box-shadow:0 2px 4px rgba(0,0,0,.08); animation:legalFade .25s ease; }
+			@keyframes legalFade { from { opacity:0; transform:translateY(3px); } to { opacity:1; transform:none; } }
+			.legal-box h2 { margin:0 0 10px; padding-bottom:7px; border-bottom:2px solid #DCE7D7; color:#4C7839; font-size:18px; }
+			.legal-box h3 { margin:15px 0 7px; color:#486C3A; font-size:14px; }
+			.legal-box p, .legal-box li { font-size:12px; line-height:1.7; }
+			.legal-box ul { margin:6px 0; padding-left:22px; }
+			.legal-note { margin:8px 0; padding:9px 11px; background:#F3F6F0; border:1px solid #D5DFD0; border-radius:6px; color:#666; font-size:11px; line-height:1.6; }
+			.legal-table { width:100%; border-collapse:collapse; background:#FFF; font-size:12px; }
+			.legal-table th, .legal-table td { padding:8px 9px; border:1px solid #CCC; text-align:left; vertical-align:top; line-height:1.5; }
+			.legal-table th { background:#EDF3E9; color:#466B37; }
+			.legal-source { color:#999; }
+	body(style='min-width: 640px;')
+		div#Top
+			+Menu()
+			div#global-notice
+				div#gn-content
+					include ../../public/global_notice.html
+		div#Jungle
+			img#Background(src='/img/bg/' + (locals.bg || 'def.png'))
+		div#Middle
+			div.legal-wrap
+				div.legal-head
+					h1 단어 데이터 출처 안내
+					p 파얼끄투에서 사용하는 자료의 출처와 이용 정보를 안내합니다.
+				div.legal-tabs
+					a(class='', href='/legal/copyright') 저작권 안내
+					a(class='active', href='/legal/word-sources') 단어 데이터 출처
+				div.legal-box
+					h2 단어 데이터 출처 안내
+					p
+						| 이 페이지는 파얼끄투에서 사용하는 단어 데이터베이스가 어디에서 왔는지 정리하는 페이지입니다. 단어 뜻 정보와 전체 라이선스 안내는 
+						a(href='/legal/copyright') 저작권 안내
+						|  페이지를 참고하세요.
+
+					h3 기본 단어(끝말잇기) 데이터베이스
+					div.legal-note 현재 파얼끄투에서 실제 사용 중인 DB의 정확한 출처와 이용 조건을 확인한 뒤 아래 표를 채우세요.
+					table.legal-table
+						thead
+							tr
+								th 데이터
+								th 출처
+						tbody
+							tr
+								td (구) 표준국어대사전
+								td.legal-source 외부 DB
+							tr
+								td (신) 표준국어대사전
+								td.legal-source 외부 DB
+							tr
+								td 우리말샘
+								td.legal-source 외부 DB
+
+					h3 어인정(주제어) / 추가 단어 데이터
+					table.legal-table
+						thead
+							tr
+								th 데이터베이스
+								th 출처
+						tbody
+							tr
+								td 끄투3 (기초 / 복합 / 표준)
+								td.legal-source 외부 DB
+							tr
+								td Roblox 관련 단어
+								td.legal-source 외부 DB
+
+					h3 출처 상태 표기
+					ul
+						li 직접 조사 — 운영자가 공개 자료를 바탕으로 직접 구성한 목록
+						li 외부 DB — 다른 프로젝트에서 제공된 데이터를 사용한 목록
+						li 확인 중 — 정확한 최초 출처 또는 이용 조건을 아직 확인 중인 목록
+
+					h3 끄코유틸 오픈DB 라이선스
+					p 위 표에서 끄코유틸 오픈DB로 표시된 데이터는 CC BY-NC-SA 4.0(저작자표시-비영리-동일조건변경허락) 및 끄코유틸이 부여한 별도 이용허가 조건에 따라 이용하고 있으며, 해당 데이터에는 GPLv3이 적용되지 않습니다.
+		div#Bottom
+			div.bottom-legal
+				a.bottom-contact(href='/legal/copyright') 저작권 안내
+				a.bottom-contact(href='/legal/word-sources') 단어 출처 안내
+			+separator(10)

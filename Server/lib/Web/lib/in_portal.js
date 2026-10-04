@@ -34,11 +34,18 @@
 			'background-image': "url(/img/kkutu/gamebg.png)",
 			'background-size': "200px 200px"
 		});
+		function isLoggedIn(){
+			// 현재 페이지를 만든 서버의 인증 판정을 그대로 사용한다.
+			return $("#portal-authenticated").text() === "1";
+		}
+
 		$stage.start.prop('disabled', true).on('click', function(e){
 			var i, j;
 
-			if($("#account-info").html() === L['LOGIN']){
-				return $("#server-0").trigger('click');
+			e.preventDefault();
+			if(!isLoggedIn()){
+				window.location.assign("/login");
+				return false;
 			}
 			for(i=0.9; i<1; i+=0.01){
 				for(j in LIST){
@@ -60,6 +67,9 @@
 			$stage.ref.trigger('click');
 		}, 60000);
 		seekServers();
+		if($("#login-required").text() === "1"){
+			alert(L['loginRequired']);
+		}
 	});
 	function seekServers(){
 		$.get("/servers", function(data){
@@ -88,7 +98,12 @@
 					.append($("<div>").addClass("server-enter").html(L['serverEnter']))
 				);
 				if (status != "x") $e.on('click', function (e) {
-					location.href = "/?server=" + i;
+					e.preventDefault();
+					if(!isLoggedIn()){
+						window.location.assign("/login");
+						return false;
+					}
+					window.location.assign("/?server=" + i);
 				}); else $e.children(".server-enter").html("-");
 			});
 			$stage.total.html("&nbsp;" + L['TOTAL'] + " " + sum + L['MN']);

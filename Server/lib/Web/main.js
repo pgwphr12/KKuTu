@@ -41,6 +41,8 @@ var passport = require('passport');
 var Const	 = require("../const");
 var https	 = require('https');
 var fs		 = require('fs');
+var path	 = require('path');
+var Net      = require('net');
 
 var Language = {
 	'ko_KR': require("./lang/ko_KR.json"),
@@ -63,6 +65,14 @@ require("../sub/checkpub");
 JLog.info("<< KKuTu Web >>");
 Server.set('views', __dirname + "/views");
 Server.set('view engine', "pug");
+// Cloudflare/WAF: trust X-Forwarded-Proto so req.protocol reflects the visitor-facing HTTPS connection.
+Server.set("trust proxy", true);
+Server.use(function(req, res, next){
+	if(Const.WAF && req.headers['cf-connecting-ip']){
+		Object.defineProperty(req, 'ip', { value: req.headers['cf-connecting-ip'], configurable: true });
+	}
+	next();
+});
 Server.use(Express.static(__dirname + "/public"));
 Server.use(Parser.urlencoded({ extended: true }));
 Server.use(Exession({
@@ -86,7 +96,7 @@ Server.use((req, res, next) => {
 	next();
 });
 Server.use((req, res, next) => {
-	if(Const.IS_SECURED) {
+	if(Const.IS_SECURED || Const.WAF) {
 		if(req.protocol == 'http') {
 			let url = 'https://'+req.get('host')+req.path;
 			res.status(302).redirect(url);
@@ -145,28 +155,42 @@ DB.ready = function(){
 			}
 		}
 	});
-	Server.listen(80);
-	if(Const.IS_SECURED) {
-		const options = Secure();
-		https.createServer(options, Server).listen(443);
-	}
+if(Const.IS_SECURED || Const.WAF) {
+	const options = Secure();
+	const edgePort = Const.EDGE_PORT || 443;
+	const HTTPS_Server = https.createServer(options, Server);
+	if(Const.WAF_GATEWAY) attachWafGateway(HTTPS_Server);
+	HTTPS_Server.listen(edgePort, function(){
+		JLog.success(`Web HTTPS/WSS gateway listening on ${edgePort}`);
+	});
+} else {
+	Server.listen(Const.MAIN_PORTS[0]);
+}
 };
-Const.MAIN_PORTS.forEach(function(v, i){
-	var KEY = process.env['WS_KEY'];
-	var protocol;
-	if(Const.IS_SECURED) {
-		protocol = 'wss';
-	} else {
-		protocol = 'ws';
-	}
-	gameServers[i] = new GameClient(KEY, `${protocol}://${GLOBAL.GAME_SERVER_HOST}:${v}/${KEY}`);
-});
-function GameClient(id, url){
-	var my = this;
 
-	my.id = id;
-	my.socket = new WS(url, { perMessageDeflate: false, rejectUnauthorized: false});
-	
+// 포트 번호로 서버를 찾기 위한 안전한 보조 객체 선언
+if (typeof gameServersMap === 'undefined') {
+    var gameServersMap = {};
+}
+
+Const.MAIN_PORTS.forEach(function(v, i){
+	var serverKey = v.toString();
+	var masterPort = (Const.MASTER_PORTS && Const.MASTER_PORTS[i]) || v;
+	// WAF_GATEWAY에서는 외부 TLS를 443에서 종료하고 내부 게임 서버에는 plain WS로 연결한다.
+	var protocol = Const.WAF_GATEWAY ? 'ws' : ((Const.IS_SECURED || Const.WAF) ? 'wss' : 'ws');
+	var clientObj = new GameClient(serverKey, `${protocol}://${GLOBAL.GAME_SERVER_HOST}:${masterPort}/${serverKey}`);
+	gameServers[i] = clientObj;
+	gameServersMap[v] = clientObj;
+	gameServersMap[serverKey] = clientObj;
+});
+
+function GameClient(id, url){
+    var my = this;
+
+    my.id = id;
+    my.socket = new WS(url, { perMessageDeflate: false, rejectUnauthorized: false });
+// ... 하단 코드 ...
+
 	my.send = function(type, data){
 		if(!data) data = {};
 		data.type = type;
@@ -203,38 +227,108 @@ function GameClient(id, url){
 		}
 	});
 }
+// Cloudflare orange-cloud single-port gateway.
+// Browser -> Cloudflare -> :443 only. Master/Room sockets stay on local internal ports.
+function attachWafGateway(edgeServer){
+	edgeServer.on('upgrade', function(req, socket, head){
+		var rawUrl = req.url || '/';
+		var clean = rawUrl.charAt(0) === '/' ? rawUrl.slice(1) : rawUrl;
+		var amp = clean.split('&');
+		var isRoom = amp.length >= 3;
+		var chan = isRoom ? Number(amp[1]) : 0;
+		var targetPort;
+
+		if(isRoom){
+			if(!chan || chan < 1){
+				socket.destroy();
+				return;
+			}
+			targetPort = Number(Const.ROOM_PORTS[0]) + chan - 1;
+		}else{
+			targetPort = Number((Const.MASTER_PORTS && Const.MASTER_PORTS[0]) || Const.MAIN_PORTS[0]);
+		}
+
+		var upstream = Net.connect({ host: GLOBAL.GAME_SERVER_HOST, port: targetPort }, function(){
+			var requestLine = req.method + ' ' + rawUrl + ' HTTP/' + req.httpVersion + '\r\n';
+			var headers = '';
+			for(var i=0; i<req.rawHeaders.length; i += 2){
+				headers += req.rawHeaders[i] + ': ' + req.rawHeaders[i + 1] + '\r\n';
+			}
+			upstream.write(requestLine + headers + '\r\n');
+			if(head && head.length) upstream.write(head);
+			socket.pipe(upstream);
+			upstream.pipe(socket);
+		});
+
+		upstream.on('error', function(err){
+			JLog.warn('WAF gateway upstream error :' + targetPort + ' ' + err.toString());
+			try { socket.destroy(); } catch(e) {}
+		});
+		socket.on('error', function(){
+			try { upstream.destroy(); } catch(e) {}
+		});
+	});
+}
+
 ROUTES.forEach(function(v){
 	require(`./routes/${v}`).run(Server, WebInit.page);
 });
 Server.get("/", function(req, res){
 	var server = req.query.server;
-	
-	//볕뉘 수정 구문삭제(220~229, 240)
+	var wantsGame = (server !== undefined && Const.MAIN_PORTS[server]);
+
 	DB.session.findOne([ '_id', req.session.id ]).on(function($ses){
-		// var sid = (($ses || {}).profile || {}).sid || "NULL";
+		// DB 세션이 잠깐 누락되어도 Express 로그인 세션이 살아 있으면
+		// 로그인 사용자를 게스트로 떨어뜨리지 않고 즉시 복구한다.
+		if(!$ses && req.session.profile && req.session.profile.id){
+			var profile = req.session.profile;
+			profile.sid = req.session.id;
+
+			return DB.session.upsert([ '_id', req.session.id ]).set({
+				'profile': profile,
+				'createdAt': Date.now()
+			}).on(function(){
+				onFinish({ _id: req.session.id, profile: profile });
+			});
+		}
+
 		if(global.isPublic){
 			onFinish($ses);
-			// DB.jjo_session.findOne([ '_id', sid ]).limit([ 'profile', true ]).on(onFinish);
 		}else{
 			if($ses) $ses.profile.sid = $ses._id;
 			onFinish($ses);
 		}
 	});
+
 	function onFinish($doc){
 		var id = req.session.id;
+		var authenticated = !!($doc && $doc.profile && $doc.profile.id);
+		var loginRequired = false;
 
-		if($doc){
+		if(authenticated){
+			$doc.profile.sid = req.session.id;
 			req.session.profile = $doc.profile;
-			id = $doc.profile.sid;
+			id = req.session.id;
 		}else{
 			delete req.session.profile;
+
+			// 비로그인 상태에서 게임 서버 진입을 시도하면
+			// 메인 포털을 다시 렌더링하지 않고 로그인 페이지로 보낸다.
+			if(wantsGame){
+				return res.redirect('/login');
+			}
 		}
-		page(req, res, Const.MAIN_PORTS[server] ? "kkutu" : "portal", {
+
+		// 로그인 사용자는 정상적으로 kkutu 화면을 렌더링한다.
+		page(req, res, (wantsGame && authenticated) ? "kkutu" : "portal", {
 			'_page': "kkutu",
+			'loginRequired': loginRequired,
+			'authenticated': authenticated,
 			'_id': id,
-			'PORT': Const.MAIN_PORTS[server],
+			'PORT': Const.WAF_GATEWAY ? (Const.EDGE_PORT || 443) : ((Const.MASTER_PORTS && Const.MASTER_PORTS[server]) || Const.MAIN_PORTS[server]),
+			'ROOM_PORT': Const.WAF_GATEWAY ? (Const.EDGE_PORT || 443) : Const.ROOM_PORTS[server],
 			'HOST': req.hostname,
-			'PROTOCOL': Const.IS_SECURED ? 'wss' : 'ws',
+			'PROTOCOL': Const.IS_SECURED || Const.WAF ? 'wss' : 'ws',
 			'TEST': req.query.test,
 			'MOREMI_PART': Const.MOREMI_PART,
 			'AVAIL_EQUIP': Const.AVAIL_EQUIP,
@@ -248,12 +342,31 @@ Server.get("/", function(req, res){
 			'KO_THEME': Const.KO_THEME,
 			'EN_THEME': Const.EN_THEME,
 			'IJP_EXCEPT': Const.IJP_EXCEPT,
-			'ogImage': "http://kkutu.kr/img/kkutu/logo.png",
-			'ogURL': "http://kkutu.kr/",
-			'ogTitle': "글자로 놀자! 끄투 온라인",
+			'ogImage': "http://kkutu.parkeolru.com/img/kkutu/logo.png",
+			'ogURL': "http://kkutu.parkeolru.com/",
+			'ogTitle': "글자로 놀자! 파얼끄투",
 			'ogDescription': "끝말잇기가 이렇게 박진감 넘치는 게임이었다니!"
 		});
 	}
+});
+
+// 사운드팩 목록: /media/kkutu/<팩이름>/ 폴더를 자동 탐색
+Server.get("/soundpacks", function(req, res){
+	var baseDir = path.join(__dirname, "public", "media", "kkutu");
+	fs.readdir(baseDir, function(err, files){
+		if(err) return res.send([]);
+		var dirs = files.filter(function(name){
+			try { return fs.statSync(path.join(baseDir, name)).isDirectory(); }
+			catch(e) { return false; }
+		});
+		var packs = dirs.map(function(name){
+			var dir = path.join(baseDir, name);
+			var packFiles = [];
+			try { packFiles = fs.readdirSync(dir); } catch(e) {}
+			return { name: name, files: packFiles };
+		});
+		res.send(packs);
+	});
 });
 
 Server.get("/servers", function(req, res){

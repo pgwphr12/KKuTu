@@ -20,6 +20,7 @@ var GLOBAL = require("./sub/global.json");
 
 exports.KKUTU_MAX = 400;
 exports.MAIN_PORTS = GLOBAL.MAIN_PORTS;
+exports.MASTER_PORTS = GLOBAL.MASTER_PORTS || [];
 exports.TEST_PORT = 4040;
 exports.SPAM_CLEAR_DELAY = 1600;
 exports.SPAM_ADD_DELAY = 750;
@@ -32,6 +33,10 @@ exports.TESTER = GLOBAL.ADMIN.concat([
 ]);
 exports.IS_SECURED = GLOBAL.IS_SECURED;
 exports.SSL_OPTIONS = GLOBAL.SSL_OPTIONS;
+exports.WAF = GLOBAL.WAF;
+exports.WAF_GATEWAY = !!GLOBAL.WAF_GATEWAY;
+exports.EDGE_PORT = GLOBAL.EDGE_PORT || 443;
+exports.ROOM_PORTS = GLOBAL.ROOM_PORTS;
 exports.OPTIONS = {
 	'man': { name: "Manner" },
 	'ext': { name: "Injeong" },
@@ -40,7 +45,8 @@ exports.OPTIONS = {
 	'prv': { name: "Proverb" },
 	'str': { name: "Strict" },
 	'k32': { name: "Sami" },
-	'no2': { name: "No2" }
+	'no2': { name: "No2" },
+	'unk': { name: "Unknown" }
 };
 exports.MOREMI_PART = [ 'back', 'eye', 'mouth', 'shoes', 'clothes', 'head', 'lhand', 'rhand', 'front' ];
 exports.CATEGORIES = [ "all", "spec", "skin", "badge", "head", "eye", "mouth", "clothes", "hs", "back" ];
@@ -72,7 +78,7 @@ exports.RULE = {
 */
 	'EKT': { lang: "en",
 		rule: "Classic",
-		opts: [ "man", "ext", "mis" ],
+		opts: [ "man", "ext", "mis", "unk" ],
 		time: 1,
 		ai: true,
 		big: false,
@@ -80,7 +86,7 @@ exports.RULE = {
 	},
 	'ESH': { lang: "en",
 		rule: "Classic",
-		opts: [ "ext", "mis" ],
+		opts: [ "ext", "mis", "unk" ],
 		time: 1,
 		ai: true,
 		big: false,
@@ -88,7 +94,7 @@ exports.RULE = {
 	},
 	'KKT': { lang: "ko",
 		rule: "Classic",
-		opts: [ "man", "ext", "mis", "loa", "str", "k32" ],
+		opts: [ "man", "ext", "mis", "loa", "str", "k32", "unk" ],
 		time: 1,
 		ai: true,
 		big: false,
@@ -96,7 +102,7 @@ exports.RULE = {
 	},
 	'KSH': { lang: "ko",
 		rule: "Classic",
-		opts: [ "man", "ext", "mis", "loa", "str" ],
+		opts: [ "man", "ext", "mis", "loa", "str", "unk" ],
 		time: 1,
 		ai: true,
 		big: false,
@@ -136,7 +142,7 @@ exports.RULE = {
 	},
 	'KAP': { lang: "ko",
 		rule: "Classic",
-		opts: [ "man", "ext", "mis", "loa", "str" ],
+		opts: [ "man", "ext", "mis", "loa", "str", "unk" ],
 		time: 1,
 		ai: true,
 		big: false,
@@ -182,6 +188,16 @@ exports.RULE = {
 		ai: false,
 		big: true,
 		ewq: false
+	},
+	// 바보 모드: DB를 조회하지 않으며 같은 입력도 반복해서 사용할 수 있다.
+	// 게임 중 점수는 계산하지만 최종 경험치/핑 보상은 항상 0이다.
+	'XBB': { lang: "etc",
+		rule: "Free",
+		opts: [ "mis" ],
+		time: 1,
+		ai: true,
+		big: false,
+		ewq: true
 	}
 };
 exports.getPreScore = function(text, chain, tr){
@@ -198,6 +214,7 @@ exports.EXAMPLE_TITLE = {
 exports.INIT_SOUNDS = [ "ㄱ", "ㄲ", "ㄴ", "ㄷ", "ㄸ", "ㄹ", "ㅁ", "ㅂ", "ㅃ", "ㅅ", "ㅆ", "ㅇ", "ㅈ", "ㅉ", "ㅊ", "ㅋ", "ㅌ", "ㅍ", "ㅎ" ];
 exports.MISSION_ko = [ "가", "나", "다", "라", "마", "바", "사", "아", "자", "차", "카", "타", "파", "하" ];
 exports.MISSION_en = [ "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z" ];
+exports.MISSION_XBB = exports.MISSION_en.concat([ "0", "1", "2", "3", "4", "5", "6", "7", "8", "9" ], exports.MISSION_ko);
 
 exports.KO_INJEONG = [
 	"IMS", "VOC", "KRR", "KTV",

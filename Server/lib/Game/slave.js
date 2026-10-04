@@ -24,7 +24,7 @@ var Secure = require('../sub/secure');
 var Server;
 var HTTPS_Server
 
-if(Const.IS_SECURED) {
+if(Const.IS_SECURED || (Const.WAF && !Const.WAF_GATEWAY)) {
 	const options = Secure();
 	HTTPS_Server = https.createServer(options)
 		.listen(global.test ? (Const.TEST_PORT + 416) : process.env['KKUTU_PORT']);
@@ -54,6 +54,56 @@ const ENABLE_ROUND_TIME = Master.ENABLE_ROUND_TIME;
 const ENABLE_FORM = Master.ENABLE_FORM;
 const MODE_LENGTH = Master.MODE_LENGTH;
 
+/* Chat link blocking [S] */
+function isAllowedChatHost(host){
+	host = String(host || "").toLowerCase().replace(/\.$/, "");
+	var allowed = [ "kkutugame.kr", "parkeolru.com", "kkutu.pe.kr" ];
+	for(var i=0; i<allowed.length; i++){
+		if(host === allowed[i] || host.slice(-(allowed[i].length + 1)) === "." + allowed[i]) return true;
+	}
+	return false;
+}
+function hasBlockedChatLink(value){
+	if(typeof value != "string") return false;
+
+	// zero-width 문자와 유니코드 점을 정규화하고, 공백 삽입 우회도 검사한다.
+	var text = value
+		.replace(/[\u200B-\u200D\u2060\uFEFF]/g, "")
+		.replace(/[。．｡]/g, ".")
+		.toLowerCase();
+	var compact = text.replace(/\s+/g, "");
+	var m;
+
+	// http/https/ftp 링크의 호스트를 직접 검사한다.
+	var schemeHost = /(?:https?|ftp):\/\/([^\/?#:]+)(?::\d{2,5})?/gi;
+	while((m = schemeHost.exec(compact))){
+		if(!isAllowedChatHost(m[1])) return true;
+	}
+
+	// 일반 도메인(example.com, example.co.kr 등)도 검사한다.
+	var domain = /(?:^|[^a-z0-9@_-])((?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,24})(?=[^a-z0-9-]|$)/gi;
+	while((m = domain.exec(compact))){
+		if(!isAllowedChatHost(m[1])) return true;
+	}
+
+	// IP 주소 기반 링크는 모두 차단한다.
+	if(/(?:^|[^\d])(?:\d{1,3}\.){3}\d{1,3}(?::\d{2,5})?(?:\/[^\s]*)?/i.test(compact)) return true;
+
+	return false;
+}
+function rejectBlockedChatLink(client, value){
+	if(!hasBlockedChatLink(value)) return false;
+
+	JLog.warn(`[ChatLinkBlock] #${client.id}: ${value}`);
+	client.send('chat', {
+		profile: { title: "시스템" },
+		value: "채팅에 허용되지 않은 링크를 올릴 수 없습니다."
+	});
+	return true;
+}
+/* Chat link blocking [E] */
+
+
 JLog.info(`<< KKuTu Server:${Server.options.port} >>`);
 
 process.on('uncaughtException', function(err){
@@ -72,24 +122,55 @@ process.on('uncaughtException', function(err){
 });
 process.on('message', function(msg){
 	switch(msg.type){
+		case "broadcast":
+			if(msg.event == "updateUser" && msg.data && DIC[msg.data.id]){
+				var target = DIC[msg.data.id];
+				var oldName = target.profile ? (target.profile.title || target.profile.name || "") : "";
+				oldName = oldName.replace(/\s/g, "");
+				if(oldName && DNAME[oldName] === target.id) delete DNAME[oldName];
+
+				if(msg.data.profile) target.profile = msg.data.profile;
+				if(msg.data.nickname !== undefined) target.nickname = msg.data.nickname;
+				if(msg.data.exordial !== undefined) target.exordial = msg.data.exordial;
+
+				if(target.profile){
+					var newName = (target.profile.title || target.profile.name || "").replace(/\s/g, "");
+					if(newName) DNAME[newName] = target.id;
+				}
+			}
+
+			var packet = Object.assign({ type: msg.event }, msg.data || {});
+			var raw = JSON.stringify(packet);
+			for(var bi in DIC){
+				if(DIC[bi].socket && DIC[bi].socket.readyState == 1) DIC[bi].socket.send(raw);
+			}
+			break;
 		case "invite-error":
 			if(!DIC[msg.target]) break;
 			DIC[msg.target].sendError(msg.code);
 			break;
 		case "room-reserve":
-			if(RESERVED[msg.session]){
-				// 이미 입장 요청을 했는데 또 하는 경우
-				break;
-			}else RESERVED[msg.session] = {
-				profile: msg.profile,
-				room: msg.room,
-				spec: msg.spec,
-				pass: msg.pass,
-				_expiration: setTimeout(function(tg, create){
-					process.send({ type: "room-expired", id: msg.room.id, create: create });
-					delete RESERVED[tg];
-				}, 10000, msg.session, msg.create)
-			};
+			if(!RESERVED[msg.session]){
+				RESERVED[msg.session] = {
+					profile: msg.profile,
+					room: msg.room,
+					spec: msg.spec,
+					pass: msg.pass,
+					_expiration: setTimeout(function(tg, create){
+						process.send({ type: "room-expired", id: msg.room.id, create: create });
+						delete RESERVED[tg];
+					}, 10000, msg.session, msg.create)
+				};
+			}
+			// RESERVED가 실제 worker 메모리에 올라간 뒤 ACK.
+			// Master는 이 ACK를 받은 뒤에만 preRoom을 브라우저로 보낸다.
+			if(msg.target && msg.preRoom){
+				process.send({
+					type: "room-reserved",
+					target: msg.target,
+					preRoom: msg.preRoom
+				});
+			}
 			break;
 		case "room-invalid":
 			delete ROOM[msg.room.id];
@@ -134,7 +215,9 @@ Server.on('connection', function(socket, info){
 		$c.admin = GLOBAL.ADMIN.indexOf($c.id) != -1;
 		
 		/* Enhanced User Block System [S] */
-		$c.remoteAddress = GLOBAL.USER_BLOCK_OPTIONS.USE_X_FORWARDED_FOR ? info.connection.remoteAddress : (info.headers['x-forwarded-for'] || info.connection.remoteAddress);
+		$c.remoteAddress = Const.WAF
+					? (info.headers['cf-connecting-ip'] || info.headers['x-forwarded-for'] || info.connection.remoteAddress)
+					: (GLOBAL.USER_BLOCK_OPTIONS.USE_X_FORWARDED_FOR ? (info.headers['x-forwarded-for'] || info.connection.remoteAddress) : info.connection.remoteAddress);
 		if(GLOBAL.USER_BLOCK_OPTIONS.USE_MODULE && ((GLOBAL.USER_BLOCK_OPTIONS.BLOCK_IP_ONLY_FOR_GUEST && $c.guest) || !GLOBAL.USER_BLOCK_OPTIONS.BLOCK_IP_ONLY_FOR_GUEST)){
 			MainDB.ip_block.findOne([ '_id', $c.remoteAddress ]).on(function($body){
 				if ($body && $body.reasonBlocked) {
@@ -192,6 +275,9 @@ KKuTu.onClientMessage = function($c, msg){
 	if(!msg) return;
 	
 	switch(msg.type){
+		case 'heartbeat':
+			$c._lastHeartbeat = Date.now();
+			return;
 		case 'yell':
 			if(!msg.value) return;
 			if(!$c.admin) return;
@@ -214,6 +300,7 @@ KKuTu.onClientMessage = function($c, msg){
 				else if(!(temp = ROOM[$c.place])) return;
 				if(!temp.gaming) return;
 				if(temp.game.late){
+					if(rejectBlockedChatLink($c, msg.value)) return;
 					$c.chat(msg.value);
 				}else if(!temp.game.loading){
 					temp.submit($c, msg.value, msg.data);
@@ -225,6 +312,7 @@ KKuTu.onClientMessage = function($c, msg){
 						break;
 					}
 				}
+				if(rejectBlockedChatLink($c, msg.value)) return;
 				if(msg.whisper){
 					process.send({ type: "tail-report", id: $c.id, chan: CHAN, place: $c.place, msg: msg });
 					msg.whisper.split(',').forEach(v => {
@@ -407,7 +495,7 @@ KKuTu.onClientMessage = function($c, msg){
 };
 KKuTu.onClientClosed = function($c, code){
 	delete DIC[$c.id];
-	if($c.profile) delete DNAME[$c.profile.title || $c.profile.name];
+	if($c.profile) delete DNAME[($c.profile.title || $c.profile.name || "").replace(/\s/g, "")];
 	if($c.socket) $c.socket.removeAllListeners();
 	KKuTu.publish('disconnRoom', { id: $c.id });
 

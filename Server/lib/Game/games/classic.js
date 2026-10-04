@@ -196,15 +196,24 @@ exports.turnEnd = function(){
 		score = Const.getPenalty(my.game.chain, target.game.score);
 		target.game.score += score;
 	}
-	getAuto.call(my, my.game.char, my.game.subChar, 0).then(function(w){
+	if(my.opts.unknown){
 		my.byMaster('turnEnd', {
 			ok: false,
 			target: target ? target.id : null,
-			score: score,
-			hint: w
+			score: score
 		}, true);
 		my.game._rrt = setTimeout(my.roundReady, 3000);
-	});
+	}else{
+		getAuto.call(my, my.game.char, my.game.subChar, 0).then(function(w){
+			my.byMaster('turnEnd', {
+				ok: false,
+				target: target ? target.id : null,
+				score: score,
+				hint: w
+			}, true);
+			my.game._rrt = setTimeout(my.roundReady, 3000);
+		});
+	}
 	clearTimeout(my.game.robotTimer);
 };
 exports.submit = function(client, text){
@@ -218,6 +227,8 @@ exports.submit = function(client, text){
 	if(!my.game.char) return;
 	
 	if(!isChainable(text, my.mode, my.game.char, my.game.subChar)) return client.chat(text);
+	text = text.replace(/\s/g, '');
+	if(/[\uD800-\uDFFF]/.test(text)) return client.publish('turnError', { code: 404, value: text }, true);
 	if(my.game.chain.indexOf(text) != -1) return client.publish('turnError', { code: 409, value: text }, true);
 	
 	l = my.rule.lang;
@@ -259,12 +270,18 @@ exports.submit = function(client, text){
 					my.game.mission = getMission(my.rule.lang);
 				}
 				setTimeout(my.turnNext, my.game.turnTime / 6);
-				if(!client.robot){
+				if(!client.robot && !my.opts.unknown){
 					client.invokeWordPiece(text, 1);
 					DB.kkutu[l].update([ '_id', text ]).set([ 'hit', $doc.hit + 1 ]).on();
 				}
 			}
-			if(firstMove || my.opts.manner) getAuto.call(my, preChar, preSubChar, 1).then(function(w){
+			if(my.opts.unknown){
+				if(my.opts.manner){
+					var validNext = (l == "ko") ? /^[°¡-ÆR¤¡-¤¾¤¿-¤Ó0-9]+$/.test(preChar) : /^[a-zA-Z0-9]+$/.test(preChar);
+					if(!validNext) return denied(403);
+				}
+				approved();
+			}else if(firstMove || my.opts.manner) getAuto.call(my, preChar, preSubChar, 1).then(function(w){
 				if(w) approved();
 				else{
 					my.game.loading = false;
@@ -279,8 +296,18 @@ exports.submit = function(client, text){
 		function denied(code){
 			my.game.loading = false;
 			client.publish('turnError', { code: code || 404, value: text }, true);
+			if(client.robot && my.opts.unknown){
+				setTimeout(function(){ if(!my.game.late) my.readyRobot(client); }, 250);
+			}
 		}
-		if($doc){
+		if(my.opts.unknown){
+			if($doc) denied(410);
+			else if(text.slice(-1) == '/') denied(404);
+			else{
+				$doc = { mean: "¾ð³ë¿î ¿öµå", theme: "", type: "unknown", hit: 0, baby: 0, flag: 0 };
+				preApproved();
+			}
+		}else if($doc){
 			if(!my.opts.injeong && ($doc.flag & Const.KOR_FLAG.INJEONG)) denied();
 			else if(my.opts.strict && (!$doc.type.match(Const.KOR_STRICT) || $doc.flag >= 4)) denied(406);
 			else if(my.opts.loanword && ($doc.flag & Const.KOR_FLAG.LOANWORD)) denied(405);
@@ -305,9 +332,13 @@ exports.submit = function(client, text){
 			default: return false;
 		}
 	}
-	DB.kkutu[l].findOne([ '_id', text ],
-		(l == "ko") ? [ 'type', Const.KOR_GROUP ] : [ '_id', Const.ENG_ID ]
-	).on(onDB);
+	if(my.opts.unknown){
+		DB.kkutu[l].findOne([ '_id', text ]).on(onDB);
+	}else{
+		DB.kkutu[l].findOne([ '_id', text ],
+			(l == "ko") ? [ 'type', Const.KOR_GROUP ] : [ '_id', Const.ENG_ID ]
+		).on(onDB);
+	}
 };
 exports.getScore = function(text, delay, ignoreMission){
 	var my = this;
@@ -331,7 +362,29 @@ exports.readyRobot = function(robot){
 	var ended = {};
 	var w, text, i;
 	var lmax;
-	var isRev = Const.GAME_TYPE[my.mode] == "KAP";
+	var gameType = Const.GAME_TYPE[my.mode];
+	var isRev = gameType == "KAP";
+
+	// ¾ð³ë¿î ¿öµå¿¡¼­´Â »çÀü¿¡ ÀÖ´Â ´Ü¾î¸¦ °í¸£¸é ¹«Á¶°Ç ½ÇÆÐÇÏ¹Ç·Î º¿µµ ÀÓÀÇ ¹®ÀÚ¿­À» ¸¸µç´Ù.
+	// ¿ì¿¬È÷ DB¿¡ Á¸ÀçÇÏ´Â ¹®ÀÚ¿­ÀÌ¸é submit()ÀÇ 410 Ã³¸® ÈÄ ÀÚµ¿À¸·Î ´Ù½Ã »ý¼ºÇÑ´Ù.
+	if(my.opts.unknown){
+		var extraLen;
+		if(gameType == "KKT") extraLen = Math.max(1, (my.game.wordLength || 3) - 1);
+		else if(gameType == "EKT") extraLen = Math.max(1, Math.min(16, level * 2 + 1));
+		else extraLen = Math.max(1, Math.min(16, level * 2 + 1));
+
+		var gen = "";
+		for(i=0; i<extraLen; i++){
+			if(my.game.mission && i == 0) gen += my.game.mission;
+			else if(my.rule.lang == "ko") gen += String.fromCharCode(0xAC00 + Math.floor(Math.random() * 11172));
+			else gen += String.fromCharCode(97 + Math.floor(Math.random() * 26));
+		}
+		if(isRev) text = gen + my.game.char;
+		else text = my.game.char + gen;
+		delay += 400;
+		after();
+		return;
+	}
 	
 	getAuto.call(my, my.game.char, my.game.subChar, 2).then(function(list){
 		if(list.length){

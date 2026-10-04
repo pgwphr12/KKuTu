@@ -1,42 +1,369 @@
 /**
- * Rule the words! KKuTu Online
- * Copyright (C) 2017 JJoriping(op@jjo.kr)
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- * 
- * You should have received a copy of the GNU General Public License
- * along with this program. If not, see <http://www.gnu.org/licenses/>.
+ * 파얼끄투 P1.0.7 로그인 페이지
+ * 클릭 가능한 anchor 기반 로그인 버튼 + 브랜드 아이콘
  */
 
+html,
 body{
-	background-color: #232323;
+	min-height: 100%;
 }
-button{
-	border: none;
-	margin: 8px auto;
-	width: 200px;
-	height: 30px;
-	cursor: pointer;
-	box-shadow: 0px 2px 2px #141414;
+
+body.login-page{
+	margin: 0;
+	min-width: 0;
+	color: #383838;
+	background: #FFFFFF;
+	font-family: NBGothic, 돋움, sans-serif;
 }
-#with-google span{ display: block; }
+
+/* ===== 상단 ===== */
+.login-header{
+	width: 100%;
+	height: 92px;
+	border-bottom: 1px solid #ECECEC;
+	background: #FFFFFF;
+}
+
+.login-header-inner{
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	box-sizing: border-box;
+	width: min(1180px, calc(100% - 40px));
+	height: 100%;
+	margin: 0 auto;
+}
+
+.login-brand-link{
+	display: flex;
+	align-items: center;
+	color: #333333;
+}
+
+.login-header-logo{
+	display: block;
+	width: 145px;
+	height: 64px;
+	object-fit: contain;
+}
+
+.login-nav{
+	display: flex;
+	align-items: center;
+	gap: 29px;
+	font-size: 14px;
+	font-weight: 700;
+	color: #656565;
+}
+
+.login-nav a{
+	position: relative;
+	padding: 8px 0;
+	transition: color 150ms ease;
+}
+
+.login-nav a:hover{
+	color: #4F8C45;
+}
+
+.login-nav a::after{
+	content: "";
+	position: absolute;
+	left: 50%;
+	right: 50%;
+	bottom: 1px;
+	height: 2px;
+	background: #69A95D;
+	transition: left 150ms ease, right 150ms ease;
+}
+
+.login-nav a:hover::after{
+	left: 0;
+	right: 0;
+}
+
+/* ===== 중앙 로그인 ===== */
+.login-main{
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	box-sizing: border-box;
+	min-height: calc(100vh - 92px - 105px);
+	padding: 72px 20px 92px;
+}
+
+.login-panel{
+	position: relative;
+	z-index: 1;
+	width: 360px;
+	max-width: 100%;
+	text-align: center;
+}
+
+.login-panel h1{
+	margin: 0 0 9px;
+	color: #4E9B45;
+	font-size: 27px;
+	font-weight: 800;
+	letter-spacing: -.5px;
+}
+
+.login-desc{
+	margin: 0 0 24px;
+	color: #888888;
+	font-size: 12px;
+	line-height: 1.5;
+}
+
 .login-with{
-	padding-top: 30px;
-	margin: 30px 0px;
+	padding: 0;
+	margin: 0 0 12px;
+	color: #777777;
+	font-size: 12px;
+	font-weight: 700;
 	text-align: center;
 }
+
+.login-provider-list{
+	display: flex;
+	flex-direction: column;
+	gap: 9px;
+	width: 100%;
+}
+
+/* 로그인 링크 자체가 버튼 역할을 한다. */
+.login-provider{
+	position: relative;
+	display: grid;
+	grid-template-columns: 56px minmax(0, 1fr) 56px;
+	align-items: center;
+	box-sizing: border-box;
+	width: 100%;
+	height: 50px;
+	margin: 0;
+	padding: 0;
+	border: 1px solid rgba(0,0,0,.12);
+	border-radius: 4px;
+	font-size: 15px;
+	font-weight: 700;
+	line-height: 1;
+	cursor: pointer;
+	box-shadow: 0 2px 5px rgba(0,0,0,.18);
+	text-decoration: none !important;
+	overflow: hidden;
+	pointer-events: auto;
+	transition: transform 120ms ease, filter 120ms ease, box-shadow 120ms ease;
+}
+
+.login-provider:hover{
+	transform: translateY(-1px);
+	filter: brightness(1.025);
+	box-shadow: 0 4px 8px rgba(0,0,0,.18);
+}
+
+.login-provider:active{
+	transform: translateY(0);
+	filter: brightness(.97);
+}
+
+.login-provider-icon-wrap{
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	box-sizing: border-box;
+	width: 56px;
+	height: 50px;
+	border-right: 1px solid rgba(0,0,0,.12);
+	background: transparent;
+}
+
+.login-provider-icon{
+	display: block;
+	width: 28px;
+	height: 28px;
+	border-radius: 0;
+	object-fit: contain;
+}
+
+.login-provider-label{
+	display: block;
+	grid-column: 2;
+	min-width: 0;
+	padding: 0 8px;
+	text-align: center;
+	white-space: nowrap;
+	color: inherit;
+}
+
+/* 3번째 빈 칸을 확보해 텍스트가 정확히 중앙에 오도록 한다. */
+.login-provider::after{
+	content: "";
+	display: block;
+	grid-column: 3;
+	width: 56px;
+	height: 1px;
+}
+
+/* 흰색/밝은 배경 로그인 버튼 */
+.login-provider-google,
+.login-provider-github{
+	border-color: #D4D4D4;
+}
+
 .login-legal{
-	padding-top: 50px;
-	color: #BBBBBB;
-	font-size: 11px;
+	margin-top: 15px;
+	padding: 0;
+	color: #666666;
+	font-size: 10px;
+	line-height: 1.65;
 	text-align: center;
 }
-.login-legal a{ color: #DDDDDD; }
+
+.login-legal a{
+	color: #4F7A49;
+	text-decoration: underline;
+	text-underline-offset: 2px;
+}
+
+/* ===== 하단 ===== */
+.login-footer{
+	width: 100%;
+	min-height: 104px;
+	border-top: 1px solid #E6E6E6;
+	background: #F7F7F7;
+}
+
+.login-footer-inner{
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	box-sizing: border-box;
+	width: min(1180px, calc(100% - 40px));
+	min-height: 104px;
+	margin: 0 auto;
+	color: #8A8A8A;
+}
+
+.login-footer-left{
+	display: flex;
+	flex-direction: column;
+	gap: 5px;
+	font-size: 11px;
+}
+
+.login-footer-left strong{
+	color: #777777;
+	font-size: 15px;
+}
+
+.login-footer-left span{
+	display: inline;
+}
+
+.login-footer-right{
+	display: flex;
+	gap: 20px;
+	font-size: 11px;
+}
+
+.login-footer-right a:hover{
+	color: #4F8C45;
+}
+
+/* ===== 반응형 ===== */
+@media (max-width: 720px){
+	.login-header{
+		height: auto;
+	}
+
+	.login-header-inner{
+		flex-direction: column;
+		align-items: center;
+		gap: 5px;
+		padding: 11px 0 9px;
+	}
+
+	.login-header-logo{
+		width: 125px;
+		height: 54px;
+	}
+
+	.login-nav{
+		gap: 17px;
+		font-size: 12px;
+	}
+
+	.login-main{
+		min-height: calc(100vh - 116px - 126px);
+		padding: 48px 18px 62px;
+	}
+
+	.login-panel{
+		width: min(350px, 100%);
+	}
+
+	.login-panel h1{
+		font-size: 24px;
+	}
+
+	.login-footer-inner{
+		flex-direction: column;
+		align-items: flex-start;
+		justify-content: center;
+		gap: 13px;
+		padding: 18px 0;
+	}
+
+	.login-footer-right{
+		gap: 14px;
+	}
+}
+
+@media (max-width: 460px){
+	.login-header-inner,
+	.login-footer-inner{
+		width: calc(100% - 24px);
+	}
+
+	.login-nav{
+		gap: 11px;
+		font-size: 11px;
+	}
+
+	.login-provider{
+		height: 46px;
+		font-size: 14px;
+	}
+
+	.login-provider-icon-wrap{
+		flex-basis: 38px;
+		margin-right: 8px;
+	}
+
+	.login-provider-label{
+		padding-right: 38px;
+	}
+}
+
+/* 로그인 브랜드 아이콘: 왼쪽 칸을 거의 꽉 채움 */
+.login-provider-icon-wrap{
+	padding: 0 !important;
+	margin: 0 !important;
+}
+.login-provider-icon{
+	width: 37px !important;
+	height: 37px !important;
+	max-width: none !important;
+	max-height: none !important;
+	margin: 0 !important;
+	padding: 0 !important;
+	object-fit: contain;
+}
+
+
+/* 시각적 정렬 보정
+ * 네이버/로블록스는 이미지 자체의 무게중심이 아래쪽이라 2px 위로 이동 */
+.login-provider-naver .login-provider-icon,
+.login-provider-roblox .login-provider-icon{
+	transform: translateY(-2px);
+}

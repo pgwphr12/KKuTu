@@ -1,24 +1,361 @@
-<html>
-	<head>
-		<title>끄투 공지사항</title>
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>파얼끄투 공지사항</title>
 <style>
-body{
-	font-family: 나눔바른고딕, 맑은 고딕, 돋움;
-}
-li{
-	font-size: 13px;
-}
+    * { box-sizing: border-box; }
+
+    html, body {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        background: transparent;
+        font-family: "Malgun Gothic", "Dotum", sans-serif;
+        font-size: 13px;
+        color: #333;
+    }
+
+    body {
+        padding: 10px 12px 12px;
+    }
+
+    #wrap {
+        width: 100%;
+        margin: 0;
+    }
+
+    .title-box {
+        background: rgba(250, 252, 247, 0.96);
+        border: 1px solid #6f9855;
+        border-radius: 10px;
+        padding: 12px 14px;
+        margin-bottom: 10px;
+        box-shadow: 0 1px 2px rgba(0,0,0,.08);
+    }
+
+    .title-box h1 {
+        margin: 0;
+        font-size: 20px;
+        color: #467033;
+        letter-spacing: -1px;
+    }
+
+    .title-box p {
+        margin: 4px 0 0;
+        color: #777;
+        font-size: 12px;
+    }
+
+    .tabs {
+        display: flex;
+        gap: 4px;
+        margin-bottom: 10px;
+        border-bottom: 2px solid #679847;
+        padding-left: 0;
+    }
+
+    .tab-btn {
+        border: 1px solid #829f6d;
+        border-bottom: none;
+        border-radius: 8px 8px 0 0;
+        background: linear-gradient(#f8fbf5, #dfead8);
+        color: #49613e;
+        height: 36px;
+        padding: 0 16px;
+        cursor: pointer;
+        font-size: 12px;
+        font-weight: bold;
+        transition: background .18s ease, color .18s ease, transform .18s ease;
+    }
+
+    .tab-btn:hover {
+        background: #edf4e8;
+        color: #3f652d;
+    }
+
+    .tab-btn.active {
+        background: #679847;
+        color: #fff;
+        border-color: #5a853f;
+        transform: translateY(1px);
+    }
+
+    .tab-content {
+        display: none;
+    }
+
+    .tab-content.active {
+        display: block;
+        animation: fadeEffect .35s ease;
+    }
+
+    @keyframes fadeEffect {
+        from {
+            opacity: 0;
+            transform: translateY(4px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    .section-title {
+        margin: 0 0 8px;
+        padding: 7px 10px;
+        border: 1px solid #557d3e;
+        border-radius: 8px;
+        background: #679847;
+        color: #fff;
+        font-size: 14px;
+    }
+
+    .update-card {
+        overflow: hidden;
+        margin-bottom: 9px;
+        border: 1px solid #b8c8ad;
+        border-radius: 9px;
+        background: rgba(255,255,255,.98);
+        transition: transform .18s ease, box-shadow .18s ease;
+    }
+
+    .update-card:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 3px 7px rgba(0,0,0,.10);
+    }
+
+    .version-title {
+        margin: 0;
+        padding: 8px 10px;
+        border-bottom: 1px solid #ccd9c4;
+        background: #eef4e9;
+        color: #3f652d;
+        font-size: 13px;
+    }
+
+    .version-title .date {
+        margin-left: 4px;
+        color: #888;
+        font-size: 11px;
+        font-weight: normal;
+    }
+
+    .tag {
+        display: inline-block;
+        margin-left: 6px;
+        padding: 1px 5px;
+        border: 1px solid #e1b65a;
+        border-radius: 3px;
+        background: #fff1c2;
+        color: #a65d00;
+        font-size: 10px;
+        vertical-align: 1px;
+    }
+
+    .update-card ul,
+    .box ul {
+        margin: 0;
+        padding: 10px 12px 10px 28px;
+    }
+
+    li {
+        margin: 4px 0;
+        line-height: 1.55;
+    }
+
+    .box {
+        overflow: hidden;
+        margin-bottom: 10px;
+        border: 1px solid #b8c8ad;
+        border-radius: 9px;
+        background: rgba(255,255,255,.98);
+        transition: transform .18s ease, box-shadow .18s ease;
+    }
+
+    .box:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 3px 7px rgba(0,0,0,.09);
+    }
+
+    .box.issue { border-left: 4px solid #c95a53; }
+    .box.plan { border-left: 4px solid #d69a3b; }
+
+    .box h3 {
+        margin: 0;
+        padding: 8px 10px;
+        border-bottom: 1px solid #d5d5d5;
+        background: #f1f1f1;
+        color: #555;
+        font-size: 13px;
+    }
+
+    .note {
+        margin: 8px 10px 10px;
+        padding: 7px 8px;
+        border: 1px solid #ddd;
+        border-radius: 7px;
+        background: #f6f6f6;
+        color: #777;
+        font-size: 11px;
+    }
+
+    @media (max-width: 600px) {
+        body {
+            padding: 7px;
+        }
+
+        .title-box h1 {
+            font-size: 18px;
+        }
+
+        .tabs {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 3px;
+        }
+
+        .tab-btn {
+            padding: 0 6px;
+            font-size: 11px;
+        }
+    }
 </style>
-	</head>
-	<body style='height: 100%;'>
-		<h3>2.5.1 [171218]</h3>
-		<ul>
-			<li>[by <a href="https://github.com/small-sunshines" target="_blank">small-sunshines</a>] 끄투 서버가 보안 연결을 지원하도록 설정했습니다.</li>
-			<li>[by <a href="https://github.com/horyu1234" target="_blank">horyu1234</a>] 자동 입력 방지를 위한 시스템을 도입했습니다.</li>
-		</ul>
-		<h3>2.5.0 [170214]</h3>
-		<ul>
-			<li>글자로 놀자! 끄투 온라인 프리 서버가 공개되었습니다.</li>
-		</ul>
-	</body>
+</head>
+<body>
+<div id="wrap">
+    <div class="title-box">
+        <h1>파얼끄투 업데이트 로그</h1>
+        <p>업데이트 내용과 알려진 문제, 추가 예정 기능을 확인할 수 있습니다.</p>
+    </div>
+
+    <div class="tabs">
+        <button class="tab-btn active" data-tab="updates">업데이트 로그</button>
+        <button class="tab-btn" data-tab="issues">알려진 문제</button>
+        <button class="tab-btn" data-tab="plans">추가 예정 기능</button>
+    </div>
+
+    <div id="updates" class="tab-content active">
+        <h2 class="section-title">업데이트 로그</h2>
+
+        <div class="update-card">
+            <h3 class="version-title">P1.0.8b <span class="date">[261004]</span><span class="tag">NEW</span></h3>
+            <ul>
+                <li>게스트 계정의 접속이 차단되었습니다 무조건 로그인을 사용하셔야 정상적으로 게임에 접속이 가능합니다.</li>
+                <li>노인정 단어 149개가 추가되었습니다.</li>
+            </ul>
+        </div>
+
+
+       <div class="update-card">
+            <h3 class="version-title">P1.0.8a <span class="date">[261004]</span></h3>
+            <ul>
+                <li>게임내 전체적인 UI 개선</li>
+            </ul>
+        </div>
+
+       <div class="update-card">
+            <h3 class="version-title">P1.0.7 <span class="date">[261001]</span></h3>
+            <ul>
+                <li>환경설정에 로비 BGM 항목 추가</li>
+            </ul>
+        </div>
+
+       <div class="update-card">
+            <h3 class="version-title">P1.0.6 <span class="date">[260930]</span></h3>
+            <ul>
+                <li>환경설정 UI 가 삐저나와있던 버그 수정</li>
+                <li>사운드 설정에서 소리가 기본적으로 0으로 되어있던 버그 수정</li>
+            </ul>
+        </div>
+
+        <div class="update-card">
+            <h3 class="version-title">P1.0.5 <span class="date">[260930]</span></h3>
+            <ul>
+                <li>본 서버에 로블록스 로그인이 추가되었습니다. 로블록스 측에서 검토가 끝나는 즉시 활성화 됩니다.</li>
+            </ul>
+        </div>
+
+        <div class="update-card">
+            <h3 class="version-title">P1.0.4 <span class="date">[260928]</span></h3>
+            <ul>
+                <li>이제 서버가 https 를 지원합니다!</li>
+                <li>아무거나 모드가 추가되었습니다. 말그대로 아무거나 처도 턴이 넘어가는 모드입니다.</li>
+                <li>언노운워드 규칙이 추가되었습나다.</li>
+            </ul>
+        </div>
+
+        <div class="update-card">
+            <h3 class="version-title">P1.0.3 <span class="date">[260927_2]</span></h3>
+            <ul>
+                <li>소리 조절 기능 + 이름 번경 기능이 추가되었습니다.</li>
+            </ul>
+        </div>
+
+        <div class="update-card">
+            <h3 class="version-title">P1.0.2 <span class="date">[260927]</span></h3>
+            <ul>
+                <li>어인정 단어가 대폭 추가되었습니다.(끄투 3 단어 추가)</li>
+                <li>어인정 단어에서 끄투 3 단어가 추가됨에 따라 노인정에도 끄투3 단어중 일부가 추가되었습니다.</li>
+            </ul>
+        </div>
+
+        <div class="update-card">
+            <h3 class="version-title">P1.0.1 <span class="date">[260908]</span></h3>
+            <ul>
+                <li>로블록스 로그인이 삭제되었습니다.(오류가 많아서 제거 다시 넣을 생각 있음)</li>
+            </ul>
+        </div>
+
+        <div class="update-card">
+            <h3 class="version-title">P1.0.0 <span class="date">[260902]</span></h3>
+            <ul>
+                <li>파얼끄투가 설치되었습니다.</li>
+                <li>네이버 로그인이 추가되었습니다.</li>
+                <li>디스코드 로그인이 추가되었습니다.</li>
+                <li>로블록스 로그인이 추가되었습니다.</li>
+            </ul>
+        </div>
+    </div>
+
+    <div id="issues" class="tab-content">
+        <h2 class="section-title">알려진 문제</h2>
+        <div class="box issue">
+            <h3>현재 확인된 문제</h3>
+            <ul>
+                <li>가끔식 방이 뜨지 않는 버그</li>
+            </ul>
+        </div>
+    </div>
+
+    <div id="plans" class="tab-content">
+        <h2 class="section-title">추가 예정 기능</h2>
+        <div class="box plan">
+            <h3>기타</h3>
+            <ul>
+                <li>리듬게임 단어 추가 예정</li>
+                <li>소셜 로그인 기능 확장</li>
+            </ul>
+            <div class="note">※ 여기 있는 내용은 추가 확정된 기능은 아니에요. 언제든 소리소문없이 사라질 수 있어요!</div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.querySelectorAll(".tab-btn").forEach(function(btn) {
+    btn.addEventListener("click", function() {
+        document.querySelectorAll(".tab-btn").forEach(function(x) {
+            x.classList.remove("active");
+        });
+        document.querySelectorAll(".tab-content").forEach(function(x) {
+            x.classList.remove("active");
+        });
+
+        btn.classList.add("active");
+        document.getElementById(btn.getAttribute("data-tab")).classList.add("active");
+    });
+});
+</script>
+</body>
 </html>

@@ -33,13 +33,17 @@ function process(req, accessToken, MainDB, $p, done) {
     $p.sid = req.session.id;
     req.session.admin = GLOBAL.ADMIN.includes($p.id);
     req.session.authType = $p.authType;
-    MainDB.session.upsert([ '_id', req.session.id ]).set({
-        'profile': $p,
-        'createdAt': now
-    }).on();
+    
     MainDB.users.findOne([ '_id', $p.id ]).on(($body) => {
         req.session.profile = $p;
+		if($body){
+			if($body.nickname && $body.nickname != null) $p.nickname = $p.title = $p.name = $body.nickname;
+		};
         MainDB.users.update([ '_id', $p.id ]).set([ 'lastLogin', now ]).on();
+		MainDB.session.upsert([ '_id', req.session.id ]).set({
+			'profile': $p,
+			'createdAt': now
+		}).on();
     });
 
     done(null, $p);
@@ -61,10 +65,34 @@ exports.run = (Server, page) => {
 		try {
 			let auth = require(path.resolve(__dirname, '..', 'auth', 'auth_' + i + '.js'))
 			Server.get('/login/' + auth.config.vendor, passport.authenticate(auth.config.vendor))
-			Server.get('/login/' + auth.config.vendor + '/callback', passport.authenticate(auth.config.vendor, {
-				successRedirect: '/',
-				failureRedirect: '/loginfail'
-			}))
+			Server.get('/login/' + auth.config.vendor + '/callback',
+				passport.authenticate(auth.config.vendor, {
+					failureRedirect: '/loginfail'
+				}),
+				function(req, res){
+					// Passport가 로그인 완료 과정에서 세션 ID를 재생성할 수 있으므로
+					// 최종 세션 ID 기준으로 게임 세션 DB를 다시 동기화한다.
+					var profile = req.user || req.session.profile;
+					if(!profile || !profile.id) return res.redirect('/loginfail');
+
+					profile.sid = req.session.id;
+					req.session.profile = profile;
+					req.session.admin = GLOBAL.ADMIN.includes(profile.id);
+					req.session.authType = profile.authType;
+
+					MainDB.session.upsert([ '_id', req.session.id ]).set({
+						'profile': profile,
+						'createdAt': Date.now()
+					}).on(function(){
+						req.session.save(function(err){
+							if(err){
+								JLog.warn('Login session save failed: ' + err.toString());
+							}
+							res.redirect('/');
+						});
+					});
+				}
+			)
 			passport.use(new auth.config.strategy(auth.strategyConfig, auth.strategy(process, MainDB /*, Ajae */)));
 			strategyList[auth.config.vendor] = {
 				vendor: auth.config.vendor,

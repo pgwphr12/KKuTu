@@ -863,19 +863,6 @@ iframe{
 		}
 			.chat-head:hover{ background-color: #FFF; }
 		.chat-body{ float: left; width: calc(100% - 190px); min-height: 14px; }
-.ADBox{
-	width: 1000px;
-	box-shadow: 0px 1px 1px #141414;
-	background-color: #232323;
-}
-.ADBox .product-title{
-	border-bottom-color: #333333;
-	color: #CCCCCC;
-	background-color: inherit;
-}
-.ADBox .product-body{
-	padding-left: 131px;
-}
 
 @keyframes RoundEffect{
 	0%		{ font-size: 16px; color: #FFFF44; background-color: rgba(0, 0, 0, 1); }
@@ -909,4 +896,62 @@ iframe{
 	0%		{ margin-top: -80px; font-size: 24px; opacity: 1; }
 	10%		{ margin-top: -90px; font-size: 30px; opacity: 0.9; }
 	100%	{ margin-top: -25px; font-size: 20px; opacity: 0.1; }
+}
+
+/* ===== 게임 내 파트너 배너 (기존 광고 영역 대체) ===== */
+.PartnerBox{
+	clear: both;
+	width: 1000px;
+	box-sizing: content-box;
+}
+
+.PartnerBox .product-title{
+	color: #FFFFFF;
+	border-bottom-color: #47783A;
+	background-color: #5E984E;
+}
+
+.game-partner-body{
+	position: relative;
+	box-sizing: border-box;
+	width: 100%;
+	aspect-ratio: 1070 / 120;
+	padding: 0 !important;
+	overflow: hidden;
+	background-color: #EAF1E7;
+}
+
+.game-partner-slide{
+	position: absolute;
+	inset: 0;
+	display: block;
+	width: 100%;
+	height: 100%;
+	opacity: 0;
+	visibility: hidden;
+	z-index: 1;
+	pointer-events: none;
+	transition: opacity .45s ease;
+	animation: none !important;
+}
+
+.game-partner-slide:first-child{
+	opacity: 1;
+	visibility: visible;
+	z-index: 2;
+	pointer-events: auto;
+}
+
+.game-partner-slide img{
+	display: block;
+	width: 100%;
+	height: 100%;
+	margin: 0;
+	padding: 0;
+	border: 0;
+	object-fit: fill;
+}
+
+.game-partner-slide:hover img{
+	filter: brightness(1.04);
 }

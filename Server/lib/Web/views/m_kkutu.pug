@@ -46,10 +46,12 @@ block JS
 	
 block CSS
 	link(rel='stylesheet', href='/css/in_game_kkutu_shop.css')
+	link(rel='stylesheet', href='/css/modern_kkutu.css')
 	
 block Jungle
 	span#PUBLIC= PUBLIC ? "true" : undefined
 	span#URL= `${locals.PROTOCOL}://${locals.HOST}:${locals.PORT}/${locals._id}`
+	span#ROOM_PORT= locals.ROOM_PORT
 	span#MOREMI_PART= locals.MOREMI_PART.join(',')
 	span#AVAIL_EQUIP= locals.AVAIL_EQUIP.join(',')
 	span#RULE= JSON.stringify(locals.RULE)
@@ -89,11 +91,35 @@ block Middle
 		button#ExitBtn.for-master.for-normal.for-gaming(style='display: none; background-color: #FFADAD;'): +FA('times')
 		button#ReplayBtn.for-lobby(style='display: none; background-color: #D9FF82;'): +FA('video-camera')
 		button#LeaderboardBtn.for-lobby(style='display: none; background-color: #FFADD3;'): +FA('trophy')
-	+Dialog('SettingDiag', 300, 240, L('settingsText'))
+	+Dialog('FirstNicknameDiag', 360, 165, '게임 닉네임 설정', true)
+		div.dialog-bar(style='height: 46px;')
+			h4(style='width: 100%; height: 42px; padding: 6px 10px; box-sizing: border-box; text-align: left; line-height: 18px;') 게임내에서 사용될 닉네임을 정해주세요.
+		div.dialog-bar
+			input#first-nickname(type='text', maxlength=12, autocomplete='off', placeholder='닉네임 (최대 12자)', style='width: 340px; margin-left: 5px;')
+		div.dialog-bar(style='height: 22px;')
+			h5#first-nickname-error(style='width: 100%; color: #D44; text-align: center; font-weight: normal;')
+		div.dialog-bar.tail-button
+			button#first-nickname-ok(style='width: 100px;') 확인
+	+Dialog('SettingDiag', 300, 490, L('settingsText'))
 		div.dialog-bar
 			h4= L('mute')
 			+SettingOption('mute-bgm', L('bgm'))
 			+SettingOption('mute-effect', L('effect'))
+		div.dialog-bar
+			h4 BGM 볼륨
+			input#volume-bgm(type='range', min='0', max='100', step='1', value='100')
+		div.dialog-bar
+			h4 효과음 볼륨
+			input#volume-effect(type='range', min='0', max='100', step='1', value='100')
+		div.dialog-bar
+			h4 사운드팩
+			select#sound-pack
+		div.dialog-bar(style='height: 42px;')
+			h4(style='height: 32px;') 로비 BGM
+			input#personal-lobby-bgm-file(type='file', accept='.mp3,.ogg,.wav,audio/*', style='display: none;')
+			button#personal-lobby-bgm-select(type='button', style='width: 78px; height: 20px; margin-right: 5px;') 파일 선택
+			button#personal-lobby-bgm-reset(type='button', style='width: 78px; height: 20px;') 기본 복원
+			span#personal-lobby-bgm-name(style='float: left; width: 187px; margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; color: #666;') 기본 BGM 사용 중
 		div.dialog-bar
 			h4= L('denyReq')
 			+SettingOption('deny-invite', L('denyInvite'))
@@ -131,7 +157,7 @@ block Middle
 			button#lb-next(style='margin-right: 6px;')= L('nextPage')
 			button#lb-me= L('myRank')
 			button#lb-prev= L('prevPage')
-	+Dialog('QuickDiag', 300, 230, L('quickRoom'))
+	+Dialog('QuickDiag', 300, 260, L('quickRoom'))
 		div.dialog-bar
 			h4= L('gameMode')
 			select#quick-mode
@@ -147,7 +173,7 @@ block Middle
 			h4(style='width: 100%; height: 20px;')#quick-queue
 		div.dialog-bar.tail-button
 			button#quick-ok= L('OK')
-	+Dialog('RoomDiag', 300, 375)
+	+Dialog('RoomDiag', 300, 435)
 		div.dialog-bar
 			h4= L('roomTitle')
 			input#room-title(placeholder=(nick || L('guest'))+L('roomDefault'), maxlength=20)
@@ -209,7 +235,7 @@ block Middle
 				- });
 		div.dialog-bar.tail-button
 			button#injpick-ok= L('OK')
-	+Dialog('PracticeDiag', 300, 135)
+	+Dialog('PracticeDiag', 300, 165)
 		div.dialog-bar
 			h4= L('selectLevel')
 			select#practice-level
@@ -327,6 +353,19 @@ block Middle
 			h4.dialog-bar-value#replay-players -
 		div.dialog-bar.tail-button
 			button#replay-view= L('replayView')
+	+Dialog('DressDiag', 300, 190, L('dress'))
+		div.dialog-bar
+			h4(style='width: 80px;')= L('myNickname')
+			input#dress-nickname(type='text', placeholder=L('myNicknameX'), style='width: 205px;', maxlength=12)
+		div.dialog-bar
+			h4(style='width: 80px;')= L('myExordial')
+			input#dress-exordial(type='text', placeholder=L('myExordialX'), style='width: 205px;', maxlength=100)
+		//- Hidden compatibility nodes keep the shared dress renderer harmless on mobile.
+		div#dress-view(style='display: none;')
+		div#dress-goods(style='display: none;')
+		div#dress-type-all.dress-type(style='display: none;')
+		div.dialog-bar.tail-button
+			button#dress-ok= L('OK')
 	+Dialog('ChatLogDiag', 300, 500, L('chatLog'))
 		div#chat-log-board(style='height: 475px; font-size: 11px; overflow-y: scroll;')
 	+Dialog('ObtainDiag', 300, 200, L('notice'), true)
@@ -380,10 +419,33 @@ block Middle
 		div#Chat
 		input#Talk(maxlength=200)
 		button#ChatBtn= L('send')
-	div#ad
+	div.PartnerBox.Product(style='clear: both; float: left; width: calc(100% - 10px) !important; min-width: 300px; box-sizing: border-box;')
+		h5.product-title 파트너
+		style.
+			#GamePartnerSlider { position: relative; width: 100%; aspect-ratio: 1070 / 120; box-sizing: border-box; padding: 0; overflow: hidden; }
+			#GamePartnerSlider .game-partner-slide { position: absolute !important; inset: 0 !important; display: block !important; width: 100% !important; height: 100% !important; margin: 0 !important; opacity: 0; visibility: visible !important; z-index: 1; pointer-events: none; animation-duration: 10s !important; animation-timing-function: linear !important; animation-iteration-count: infinite !important; animation-fill-mode: both !important; }
+			#GamePartnerSlider .game-partner-first { opacity: 1; z-index: 2; pointer-events: auto; animation-name: ParkPartnerFirst !important; }
+			#GamePartnerSlider .game-partner-second { opacity: 0; z-index: 1; pointer-events: none; animation-name: ParkPartnerSecond !important; }
+			#GamePartnerSlider .game-partner-slide img { display: block !important; width: 100% !important; height: 100% !important; object-fit: cover !important; margin: 0 !important; }
+			#GamePartnerSlider:hover .game-partner-slide { animation-play-state: paused !important; }
+			@keyframes ParkPartnerFirst {
+				0%, 45% { opacity: 1; z-index: 2; pointer-events: auto; }
+				50%, 95% { opacity: 0; z-index: 1; pointer-events: none; }
+				100% { opacity: 1; z-index: 2; pointer-events: auto; }
+			}
+			@keyframes ParkPartnerSecond {
+				0%, 45% { opacity: 0; z-index: 1; pointer-events: none; }
+				50%, 95% { opacity: 1; z-index: 2; pointer-events: auto; }
+				100% { opacity: 0; z-index: 1; pointer-events: none; }
+			}
+		div#GamePartnerSlider.product-body.game-partner-body
+			a.game-partner-slide.game-partner-first(href='https://site.kkutugame.kr', target='_blank', rel='noopener noreferrer', aria-label='끄투커넥트')
+				img(src='/img/partner/1.png', alt='끄투커넥트 파트너 배너')
+			a.game-partner-slide.game-partner-second(href='https://kkutugame.kr', target='_blank', rel='noopener noreferrer', aria-label='끄투게임즈코리아')
+				img(src='/img/partner/2.png', alt='끄투게임즈코리아 파트너 배너')
 
 block Bottom
 	div#facebook-menu
-		div.fb-like(data-href='http://jjo.kr/kkutu', data-width='300', data-layout='button_count', data-action='like', data-show-faces='true', data-share='true')
+		div.fb-like(data-href='http://kkutu.parkeolru.com', data-width='300', data-layout='button_count', data-action='like', data-show-faces='true', data-share='true')
 	div.bottom-legal!= L('dictionarySupport')
 	div.bottom-legal!= L('etcSupport')

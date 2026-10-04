@@ -96,7 +96,11 @@ var L;
 			$.cookie('test', "");
 		}
 		if(gn.length > 1) $gn.show();
-		$gn.on('click', function(e){ $gn.hide(); });
+		$gn.add("#gn-content").off("click.kkutuNotice").on("click.kkutuNotice", function(e){
+			e.preventDefault();
+			e.stopPropagation();
+			$gn.hide();
+		});
 		
 		$(window).on('resize', function(e){
 			size = [ $(window).width(), $(window).height() ];
@@ -114,7 +118,7 @@ var L;
 			if($("#quick-search-btn").hasClass("searching")) return;
 			if(v = $(".autocomp-select").html()) $("#quick-search-tf").val(v);
 			$("#quick-search-btn").addClass("searching").html($("<i>").addClass("fa fa-spin fa-spinner"));
-			location.href = "http://jjo.kr?q=" + encodeURI($("#quick-search-tf").val());
+			location.href = "http://parkeolru.com" + encodeURI($("#quick-search-tf").val());
 		}).hotkey($("#quick-search-tf"), 13);
 	
 	// 계정

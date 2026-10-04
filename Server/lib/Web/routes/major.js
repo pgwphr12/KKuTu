@@ -121,15 +121,97 @@ Server.get("/shop", function(req, res){
 });
 
 // POST
-Server.post("/exordial", function(req, res){
-	var text = req.body.data || "";
-	
-	if(req.session.profile){
-		text = text.slice(0, 100);
-		MainDB.users.update([ '_id', req.session.profile.id ]).set([ 'exordial', text ]).on(function($res){
-			res.send({ text: text });
+// Safe nickname/profile update (ported from KKuTu-N for this older server).
+Server.post("/profile", function(req, res){
+	if(!req.session.profile) return res.send({ error: 400 });
+
+	var uid = req.session.profile.id;
+	var hasNickname = req.body.nickname !== undefined && req.body.nickname !== null;
+	var hasExordial = req.body.exordial !== undefined && req.body.exordial !== null;
+	var nickname = hasNickname ? String(req.body.nickname).trim().replace(/\s+/g, " ") : undefined;
+	var exordial = hasExordial ? String(req.body.exordial).slice(0, 100) : undefined;
+
+	if(hasNickname){
+		if(!nickname || nickname.length > 12) return res.send({ error: 458 });
+		if(/[\x00-\x1F\x7F<>"'&{}\[\]\/?.,;:|)*~`!^\-+@#$%\\=(]/.test(nickname)) return res.send({ error: 458 });
+	}
+
+	function updateSessionProfile(done){
+		MainDB.session.update([ '_id', req.session.id ]).set([ 'profile', req.session.profile ]).on(function(){
+			done();
 		});
-	}else res.send({ error: 400 });
+	}
+
+	function saveExordial(done){
+		if(!hasExordial) return done();
+		MainDB.users.upsert([ '_id', uid ]).set([ 'exordial', exordial ]).on(function(){
+			req.session.profile.exordial = exordial;
+			done();
+		});
+	}
+
+	if(!hasNickname){
+		return saveExordial(function(){
+			updateSessionProfile(function(){
+				res.send({ result: 200, exordial: exordial });
+			});
+		});
+	}
+
+	MainDB.users.findOne([ 'nickname', nickname ]).on(function(owner){
+		if(owner && owner._id !== uid) return res.send({ error: 456 });
+
+		MainDB.users.findOne([ '_id', uid ]).on(function(me){
+			me = me || {};
+
+			// Submitting the current nickname is not a real change and does not reset cooldown.
+			if(me.nickname === nickname){
+				if(me.requireNickname === true){
+					return MainDB.users.update([ '_id', uid ]).set([ 'requireNickname', false ]).on(function(){
+						saveExordial(function(){
+							updateSessionProfile(function(){
+								res.send({ result: 200, nickname: nickname, exordial: exordial });
+							});
+						});
+					});
+				}
+				return saveExordial(function(){
+					updateSessionProfile(function(){
+						res.send({ result: 200, nickname: nickname, exordial: exordial });
+					});
+				});
+			}
+
+			// Keep the original server rule: one nickname change every 7 days.
+			if(me.nickname && me.nickChanged){
+				var changedAt = Number(me.nickChanged);
+				if(isNaN(changedAt)) changedAt = Date.parse(me.nickChanged);
+				if(changedAt && !isNaN(changedAt)){
+					var remaining = changedAt + 7 * 24 * 60 * 60 * 1000 - Date.now();
+					if(remaining > 0) return res.send({ error: 457, remaining: remaining });
+				}
+			}
+
+			MainDB.users.upsert([ '_id', uid ]).set(
+				[ 'nickname', nickname ],
+				[ 'nickChanged', String(Date.now()) ],
+				[ 'requireNickname', false ],
+				hasExordial ? [ 'exordial', exordial ] : undefined
+			).on(function(){
+				req.session.profile.nickname = nickname;
+				req.session.profile.title = nickname;
+				req.session.profile.name = nickname;
+				if(hasExordial) req.session.profile.exordial = exordial;
+
+				updateSessionProfile(function(){
+					res.send({ result: 200, nickname: nickname, exordial: exordial });
+				});
+			}, null, function(err){
+				if(err && err.code == '23505') return res.send({ error: 456 });
+				return res.send({ error: 500 });
+			});
+		});
+	});
 });
 Server.post("/buy/:id", function(req, res){
 	if(req.session.profile){

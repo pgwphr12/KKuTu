@@ -46,7 +46,7 @@
 	float: left;
 	width: 315px;
 	height: 70px;
-	font-size: 20px;
+	font-size: 14px;
 	font-weight: bold;
 	border: none;
 	border-bottom-left-radius: inherit;
@@ -94,4 +94,216 @@
 @keyframes BGScroll{
 	from{ background-position: 0px 0px; }
 	to{ background-position: -200px -200px; }
+}
+
+/* 파얼끄투 메인 바로가기 버튼 - 2번째 참고 이미지 크기 */
+.portal-side{
+	box-sizing: border-box;
+}
+.portal-side .server-list-box{
+    float: right;
+    width: 320px;
+}
+.portal-link-grid{
+    clear: both;
+    width: 415px;
+    margin-left: auto;
+}
+.portal-link-grid{
+	clear: both;
+	display: grid;
+	grid-template-columns: repeat(4, 100px);
+	grid-auto-rows: 40px;
+	gap: 5px;
+	box-sizing: border-box;
+	width: 415px;
+	max-width: 100%;
+	margin-top: 10px;
+	margin-left: auto;
+	justify-content: end;
+}
+.portal-main-link{
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	box-sizing: border-box;
+	width: 100px;
+	height: 40px;
+	padding: 5px 4px;
+	border: 1px solid rgba(0,0,0,.23);
+	border-radius: 8px;
+	box-shadow: 0 2px 2px rgba(0,0,0,.38);
+	color: #FFF !important;
+	font-size: 14px;
+	font-weight: bold;
+	line-height: 1.15;
+	text-align: center;
+	text-decoration: none !important;
+	text-shadow: 0 1px 1px rgba(0,0,0,.18);
+	transition: filter 150ms ease, transform 150ms ease;
+}
+.portal-main-link:hover{
+	filter: brightness(1.08);
+	transform: translateY(-1px);
+}
+.portal-main-link:active{
+	filter: brightness(.94);
+	transform: translateY(1px);
+}
+.link-terms{ background:#43A45E; }
+.link-privacy{ background:#4383C8; }
+.link-policy{ background:#D28A3D; }
+.link-punish{ background:#CB4444; }
+.link-copyright{ background:#7A58C7; }
+.link-wordsource{ background:#4BB49F; }
+.link-update{ background:#C9B634; }
+.link-discord{ background:#5865F2; }
+
+@media (max-width: 760px){
+	.portal-link-grid{
+		grid-template-columns: repeat(2, 100px);
+		grid-auto-rows: 40px;
+		width: 205px;
+		gap: 5px;
+	}
+	.portal-main-link{
+		width: 100px;
+		height: 40px;
+		font-size: 13px;
+	}
+}
+
+
+/* ===== 파얼끄투 파트너 배너 ===== */
+.partner-section{
+	float: left;
+	box-sizing: border-box;
+	width: calc(100% - 4px);
+	margin-top: 12px;
+	border: 1px solid #89AE7B;
+	border-radius: 10px;
+	overflow: hidden;
+	background: rgba(246, 249, 244, .96);
+	box-shadow: 0 2px 5px rgba(34, 68, 29, .16);
+}
+
+.partner-section-title{
+	box-sizing: border-box;
+	height: 30px;
+	margin: 0;
+	padding: 6px 11px;
+	border: 0;
+	border-bottom: 1px solid #47783A;
+	color: #FFFFFF;
+	font-size: 14px;
+	font-weight: bold;
+	line-height: 17px;
+	text-align: left;
+	background: #5E984E;
+}
+
+.partner-carousel{
+	position: relative;
+	width: 100%;
+	aspect-ratio: 1070 / 120;
+	min-height: 60px;
+	overflow: hidden;
+	background: #EAF1E7;
+}
+
+.partner-slide{
+	position: absolute;
+	inset: 0;
+	display: block;
+	width: 100%;
+	height: 100%;
+	opacity: 0;
+	visibility: hidden;
+	z-index: 1;
+	pointer-events: none;
+}
+
+/* JS와 무관하게 10초 주기로 1.png / 2.png를 5초씩 표시 */
+.partner-slide:nth-child(1){
+	animation: partnerSlideFirst 10s infinite;
+}
+.partner-slide:nth-child(2){
+	animation: partnerSlideSecond 10s infinite;
+}
+
+/* 마우스를 올리면 현재 배너에서 멈춤 */
+.partner-carousel:hover .partner-slide{
+	animation-play-state: paused;
+}
+
+@keyframes partnerSlideFirst{
+	0%, 45%{
+		opacity: 1;
+		visibility: visible;
+		z-index: 2;
+		pointer-events: auto;
+	}
+	50%, 95%{
+		opacity: 0;
+		visibility: hidden;
+		z-index: 1;
+		pointer-events: none;
+	}
+	100%{
+		opacity: 1;
+		visibility: visible;
+		z-index: 2;
+		pointer-events: auto;
+	}
+}
+
+@keyframes partnerSlideSecond{
+	0%, 45%{
+		opacity: 0;
+		visibility: hidden;
+		z-index: 1;
+		pointer-events: none;
+	}
+	50%, 95%{
+		opacity: 1;
+		visibility: visible;
+		z-index: 2;
+		pointer-events: auto;
+	}
+	100%{
+		opacity: 0;
+		visibility: hidden;
+		z-index: 1;
+		pointer-events: none;
+	}
+}
+
+.partner-slide img{
+	display: block;
+	width: 100%;
+	height: 100%;
+	margin: 0;
+	padding: 0;
+	border: 0;
+	object-fit: cover;
+}
+
+.partner-slide:hover img{
+	filter: brightness(1.04);
+}
+
+@media (max-width: 760px){
+	.partner-section{
+		width: 100%;
+		margin-top: 10px;
+		border-radius: 8px;
+	}
+	.partner-section-title{
+		height: 28px;
+		padding: 5px 9px;
+		font-size: 13px;
+	}
+	.partner-carousel{
+		min-height: 44px;
+	}
 }

@@ -53,6 +53,485 @@ var audioContext = window.hasOwnProperty("AudioContext") ? (new AudioContext()) 
 var _WebSocket = window['WebSocket'];
 var _setInterval = setInterval;
 var _setTimeout = setTimeout;
+
+/* ParkEolru sound settings.
+ * - BGM/effect volume changes are applied immediately.
+ * - Every sound pack is discovered and preloaded when the game page opens.
+ * - Switching packs only swaps the already-loaded sound bank; the page is never reloaded.
+ * - Missing pack files reuse the Default pack sound.
+ */
+var KKUTU_SOUND_PACKS = [
+	{ id: "default", name: "기본", path: "/media/kkutu/", files: null },
+	{ id: "kkutun", name: "병맛", path: "/media/kkutu/%EB%B3%91%EB%A7%9B/", files: null }
+];
+var KKUTU_SOUND_PREF_KEY = "kkutu_sound_preferences_v1";
+var $soundBanks = {};
+
+function kkutuClampSoundVolume(v){
+	// localStorage에 값이 없는 첫 접속에서는 100%가 기본값이다.
+	// Number(null) === 0 이므로 null/undefined를 먼저 처리해야 한다.
+	if(v === null || v === undefined || v === "") v = 100;
+	v = Number(v);
+	if(isNaN(v)) v = 100;
+	return Math.max(0, Math.min(100, v));
+}
+function kkutuPackIdForFolder(name){
+	// 기존에 저장된 "병맛" 팩 ID(kkutun)와의 호환성을 유지한다.
+	if(name == "병맛") return "kkutun";
+	return name;
+}
+function kkutuGetSoundPack(id){
+	var i;
+	for(i=0; i<KKUTU_SOUND_PACKS.length; i++){
+		if(KKUTU_SOUND_PACKS[i].id == id) return KKUTU_SOUND_PACKS[i];
+	}
+	return KKUTU_SOUND_PACKS[0];
+}
+function kkutuDefaultSoundPath(file){
+	return "/media/kkutu/" + file;
+}
+function kkutuDiscoverSoundPacks(callback){
+	$.getJSON("/soundpacks").done(function(packs){
+		var list = [
+			{ id: "default", name: "기본", path: "/media/kkutu/", files: null }
+		];
+		(packs || []).forEach(function(pack){
+			var folder = pack && pack.name;
+			if(!folder) return;
+			list.push({
+				id: kkutuPackIdForFolder(folder),
+				name: folder,
+				path: "/media/kkutu/" + encodeURIComponent(folder) + "/",
+				files: pack.files || []
+			});
+		});
+		KKUTU_SOUND_PACKS = list;
+	}).fail(function(){
+		console.warn("[Sound pack] /soundpacks 목록을 불러오지 못해 기본 목록을 사용합니다.");
+	}).always(function(){
+		if(callback) callback();
+	});
+}
+function kkutuLoadSoundPreferences(){
+	var pref = null;
+	try{
+		pref = JSON.parse(localStorage.getItem(KKUTU_SOUND_PREF_KEY) || "null");
+	}catch(e){}
+	$data.bgmVolume = kkutuClampSoundVolume(pref && pref.bgmVolume) / 100;
+	$data.effectVolume = kkutuClampSoundVolume(pref && pref.effectVolume) / 100;
+	$data.soundPack = kkutuGetSoundPack(pref && pref.soundPack).id;
+}
+function kkutuSaveSoundPreferences(){
+	try{
+		localStorage.setItem(KKUTU_SOUND_PREF_KEY, JSON.stringify({
+			bgmVolume: Math.round(($data.bgmVolume == null ? 1 : $data.bgmVolume) * 100),
+			effectVolume: Math.round(($data.effectVolume == null ? 1 : $data.effectVolume) * 100),
+			soundPack: $data.soundPack || "default"
+		}));
+	}catch(e){}
+}
+function kkutuPopulateSoundPackSelect(){
+	var i, $sel = $("#sound-pack");
+	if(!$sel.length) return;
+	$sel.empty();
+	for(i=0; i<KKUTU_SOUND_PACKS.length; i++){
+		$sel.append($("<option>").attr("value", KKUTU_SOUND_PACKS[i].id).text(KKUTU_SOUND_PACKS[i].name));
+	}
+	$sel.val($data.soundPack || "default");
+	$("#volume-bgm").val(Math.round(($data.bgmVolume == null ? 1 : $data.bgmVolume) * 100));
+	$("#volume-effect").val(Math.round(($data.effectVolume == null ? 1 : $data.effectVolume) * 100));
+}
+function kkutuSoundVolume(loop){
+	var mute = loop ? $data.muteBGM : $data.muteEff;
+	var volume = loop ? $data.bgmVolume : $data.effectVolume;
+	if(mute) return 0;
+	if(typeof volume != "number" || isNaN(volume)) return 1;
+	return Math.max(0, Math.min(1, volume));
+}
+function kkutuRefreshActiveSoundVolumes(){
+	var k, src, volume;
+	for(k in $_sound){
+		src = $_sound[k];
+		if(!src) continue;
+		volume = kkutuSoundVolume(!!src._kkutuLoop);
+		if(src._kkutuGain && src._kkutuGain.gain){
+			src._kkutuGain.gain.value = volume;
+		}else if(src.audio){
+			src.audio.volume = volume;
+		}
+	}
+}
+function kkutuSoundDefinitions(){
+	var i;
+	var list = [
+		{ key: "k", file: "k.mp3" },
+		{ key: "lobby", file: "LobbyBGM.mp3" },
+		{ key: "jaqwi", file: "JaqwiBGM.mp3" },
+		{ key: "jaqwiF", file: "JaqwiFastBGM.mp3" },
+		{ key: "game_start", file: "game_start.mp3" },
+		{ key: "round_start", file: "round_start.mp3" },
+		{ key: "fail", file: "fail.mp3" },
+		{ key: "timeout", file: "timeout.mp3" },
+		{ key: "lvup", file: "lvup.mp3" },
+		{ key: "Al", file: "Al.mp3" },
+		{ key: "success", file: "success.mp3" },
+		{ key: "missing", file: "missing.mp3" },
+		{ key: "mission", file: "mission.mp3" },
+		{ key: "kung", file: "kung.mp3" },
+		{ key: "horr", file: "horr.mp3" }
+	];
+	for(i=0; i<=10; i++){
+		list.push(
+			{ key: "T"+i, file: "T"+i+".mp3" },
+			{ key: "K"+i, file: "K"+i+".mp3" },
+			{ key: "As"+i, file: "As"+i+".mp3" }
+		);
+	}
+	return list;
+}
+function kkutuCreateHtmlAudioSound(audioUrl){
+	var my = {};
+	my.audio = new Audio(audioUrl);
+	my.audio.preload = "auto";
+	my.audio.load();
+	my.start = function(){
+		my.audio.volume = kkutuSoundVolume(!!my._kkutuLoop);
+		var p = my.audio.play();
+		if(p && p.catch) p.catch(function(){});
+	};
+	my.stop = function(){
+		try { my.audio.currentTime = 0; } catch(e){}
+		my.audio.pause();
+	};
+	return my;
+}
+function kkutuFetchBankSound(pack, def, callback){
+	var req = new XMLHttpRequest();
+	var completed = false;
+	var url = pack.path + def.file;
+
+	function finish(sound){
+		if(completed) return;
+		completed = true;
+		callback(sound);
+	}
+	function fallback(){
+		if(pack.id != "default" && $soundBanks.default && $soundBanks.default[def.key]){
+			finish($soundBanks.default[def.key]);
+		}else{
+			finish(kkutuCreateHtmlAudioSound(kkutuDefaultSoundPath(def.file)));
+		}
+	}
+
+	req.open("GET", url);
+	req.responseType = "arraybuffer";
+	req.timeout = 8000;
+	req.ontimeout = fallback;
+	req.onabort = fallback;
+	req.onerror = fallback;
+	req.onload = function(e){
+		if(req.status && (req.status < 200 || req.status >= 300)){
+			fallback();
+			return;
+		}
+		if(audioContext){
+			audioContext.decodeAudioData(e.target.response, function(buf){
+				finish(buf);
+			}, fallback);
+		}else{
+			finish(kkutuCreateHtmlAudioSound(url));
+		}
+	};
+	req.send();
+}
+function kkutuLoadSoundBank(pack, definitions, callback){
+	var remain = definitions.length;
+	var bank = {};
+	$soundBanks[pack.id] = bank;
+
+	if(!remain){
+		if(callback) callback();
+		return;
+	}
+	definitions.forEach(function(def){
+		// /soundpacks가 알려 준 파일 목록에 없는 파일은 네트워크 요청 없이 Default를 재사용한다.
+		if(pack.id != "default" && pack.files && pack.files.indexOf(def.file) == -1){
+			bank[def.key] = ($soundBanks.default && $soundBanks.default[def.key]) || null;
+			if(--remain == 0 && callback) callback();
+			return;
+		}
+		kkutuFetchBankSound(pack, def, function(sound){
+			bank[def.key] = sound;
+			if(--remain == 0 && callback) callback();
+		});
+	});
+}
+function kkutuLoadAllSoundPacks(callback){
+	var definitions = kkutuSoundDefinitions();
+	var defaultPack = kkutuGetSoundPack("default");
+	var extras = KKUTU_SOUND_PACKS.filter(function(pack){ return pack.id != "default"; });
+
+	$soundBanks = {};
+	kkutuLoadSoundBank(defaultPack, definitions, function(){
+		if(!extras.length){
+			if(callback) callback();
+			return;
+		}
+		var remain = extras.length;
+		extras.forEach(function(pack){
+			kkutuLoadSoundBank(pack, definitions, function(){
+				if(--remain == 0 && callback) callback();
+			});
+		});
+	});
+}
+function kkutuActivateSoundPack(id, restartBGM){
+	var pack = kkutuGetSoundPack(id);
+	var bgmKey = $data.bgm && $data.bgm.key;
+
+	$data.soundPack = pack.id;
+	$sound = $soundBanks[pack.id] || $soundBanks.default || $sound;
+
+	if(restartBGM && bgmKey && $sound && $sound[bgmKey]){
+		playBGM(bgmKey);
+	}
+}
+function kkutuPreviewSoundPackFromUI(){
+	var next = kkutuGetSoundPack($("#sound-pack").val()).id;
+	if(next == $data.soundPack) return;
+	kkutuActivateSoundPack(next, true);
+}
+function kkutuApplyLiveVolumeFromUI(){
+	$data.bgmVolume = kkutuClampSoundVolume($("#volume-bgm").val()) / 100;
+	$data.effectVolume = kkutuClampSoundVolume($("#volume-effect").val()) / 100;
+	kkutuRefreshActiveSoundVolumes();
+}
+function kkutuApplySoundPreferencesFromUI(){
+	kkutuApplyLiveVolumeFromUI();
+	kkutuActivateSoundPack(kkutuGetSoundPack($("#sound-pack").val()).id, false);
+	kkutuSaveSoundPreferences();
+}
+
+/* Personal lobby BGM (browser-only / IndexedDB)
+ * The selected audio file never leaves this browser.
+ * It is used only for the lobby BGM and overrides the selected sound pack's LobbyBGM.mp3.
+ */
+var KKUTU_PERSONAL_BGM_DB = "kkutu_personal_bgm_v1";
+var KKUTU_PERSONAL_BGM_STORE = "audio";
+var KKUTU_PERSONAL_BGM_KEY = "lobby";
+var KKUTU_PERSONAL_BGM_MAX = 20 * 1024 * 1024;
+var $personalLobbySound = null;
+var $personalLobbyMeta = null;
+
+function kkutuOpenPersonalBgmDB(callback, fail){
+	if(!window.indexedDB){
+		if(fail) fail(new Error("IndexedDB is not supported."));
+		return;
+	}
+	var req = indexedDB.open(KKUTU_PERSONAL_BGM_DB, 1);
+	req.onupgradeneeded = function(e){
+		var db = e.target.result;
+		if(!db.objectStoreNames.contains(KKUTU_PERSONAL_BGM_STORE)){
+			db.createObjectStore(KKUTU_PERSONAL_BGM_STORE, { keyPath: "id" });
+		}
+	};
+	req.onsuccess = function(e){ callback(e.target.result); };
+	req.onerror = function(e){ if(fail) fail(e.target.error || e); };
+}
+function kkutuUpdatePersonalBgmLabel(){
+	var name = ($personalLobbyMeta && $personalLobbyMeta.name) ? $personalLobbyMeta.name : "기본 BGM 사용 중";
+	$("#personal-lobby-bgm-name").text(name).attr("title", name);
+}
+function kkutuReleasePersonalLobbySound(){
+	if($personalLobbySound && $personalLobbySound._kkutuObjectUrl){
+		try { URL.revokeObjectURL($personalLobbySound._kkutuObjectUrl); } catch(e){}
+	}
+	$personalLobbySound = null;
+}
+function kkutuMakeBlobAudioSound(blob){
+	var url = URL.createObjectURL(blob);
+	var my = {};
+	my.audio = new Audio(url);
+	my.audio.preload = "auto";
+	my.audio.load();
+	my._kkutuObjectUrl = url;
+	my.start = function(){
+		my.audio.volume = kkutuSoundVolume(true);
+		var p = my.audio.play();
+		if(p && p.catch) p.catch(function(){});
+	};
+	my.stop = function(){
+		try { my.audio.currentTime = 0; } catch(e){}
+		my.audio.pause();
+	};
+	return my;
+}
+function kkutuPreparePersonalLobbySound(blob, callback){
+	if(!blob){
+		kkutuReleasePersonalLobbySound();
+		if(callback) callback(false);
+		return;
+	}
+	var reader = new FileReader();
+	reader.onload = function(e){
+		if(audioContext){
+			audioContext.decodeAudioData(e.target.result, function(buf){
+				kkutuReleasePersonalLobbySound();
+				$personalLobbySound = buf;
+				if(callback) callback(true);
+			}, function(){
+				kkutuReleasePersonalLobbySound();
+				$personalLobbySound = kkutuMakeBlobAudioSound(blob);
+				if(callback) callback(true);
+			});
+		}else{
+			kkutuReleasePersonalLobbySound();
+			$personalLobbySound = kkutuMakeBlobAudioSound(blob);
+			if(callback) callback(true);
+		}
+	};
+	reader.onerror = function(){
+		if(callback) callback(false);
+	};
+	reader.readAsArrayBuffer(blob);
+}
+function kkutuLoadPersonalLobbyBgm(callback){
+	kkutuOpenPersonalBgmDB(function(db){
+		var tx = db.transaction(KKUTU_PERSONAL_BGM_STORE, "readonly");
+		var req = tx.objectStore(KKUTU_PERSONAL_BGM_STORE).get(KKUTU_PERSONAL_BGM_KEY);
+		req.onsuccess = function(){
+			var row = req.result;
+			db.close();
+			if(!row || !row.blob){
+				$personalLobbyMeta = null;
+				kkutuReleasePersonalLobbySound();
+				kkutuUpdatePersonalBgmLabel();
+				if(callback) callback();
+				return;
+			}
+			$personalLobbyMeta = {
+				name: row.name || "개인 로비 BGM",
+				type: row.type || "",
+				size: row.size || 0,
+				updatedAt: row.updatedAt || 0
+			};
+			kkutuPreparePersonalLobbySound(row.blob, function(){
+				kkutuUpdatePersonalBgmLabel();
+				if(callback) callback();
+			});
+		};
+		req.onerror = function(){
+			db.close();
+			$personalLobbyMeta = null;
+			kkutuUpdatePersonalBgmLabel();
+			if(callback) callback();
+		};
+	}, function(){
+		$personalLobbyMeta = null;
+		kkutuUpdatePersonalBgmLabel();
+		if(callback) callback();
+	});
+}
+function kkutuSavePersonalLobbyBgm(file, callback){
+	kkutuOpenPersonalBgmDB(function(db){
+		var tx = db.transaction(KKUTU_PERSONAL_BGM_STORE, "readwrite");
+		tx.objectStore(KKUTU_PERSONAL_BGM_STORE).put({
+			id: KKUTU_PERSONAL_BGM_KEY,
+			name: file.name || "개인 로비 BGM",
+			type: file.type || "",
+			size: file.size || 0,
+			updatedAt: Date.now(),
+			blob: file
+		});
+		tx.oncomplete = function(){
+			db.close();
+			if(callback) callback(true);
+		};
+		tx.onerror = function(){
+			db.close();
+			if(callback) callback(false);
+		};
+	}, function(){
+		if(callback) callback(false);
+	});
+}
+function kkutuDeletePersonalLobbyBgm(callback){
+	kkutuOpenPersonalBgmDB(function(db){
+		var tx = db.transaction(KKUTU_PERSONAL_BGM_STORE, "readwrite");
+		tx.objectStore(KKUTU_PERSONAL_BGM_STORE).delete(KKUTU_PERSONAL_BGM_KEY);
+		tx.oncomplete = function(){
+			db.close();
+			if(callback) callback(true);
+		};
+		tx.onerror = function(){
+			db.close();
+			if(callback) callback(false);
+		};
+	}, function(){
+		if(callback) callback(false);
+	});
+}
+function kkutuIsAllowedPersonalBgm(file){
+	if(!file) return false;
+	var name = (file.name || "").toLowerCase();
+	var type = (file.type || "").toLowerCase();
+	return /\.(mp3|ogg|wav)$/.test(name) ||
+		type == "audio/mpeg" ||
+		type == "audio/mp3" ||
+		type == "audio/ogg" ||
+		type == "audio/wav" ||
+		type == "audio/x-wav";
+}
+function kkutuUsePersonalLobbyBgmFile(file){
+	if(!file) return;
+	if(!kkutuIsAllowedPersonalBgm(file)){
+		alert("MP3, OGG, WAV 파일만 사용할 수 있습니다.");
+		return;
+	}
+	if(file.size > KKUTU_PERSONAL_BGM_MAX){
+		alert("로비 BGM은 최대 20MB까지 사용할 수 있습니다.");
+		return;
+	}
+	var wasLobby = !!($data.bgm && $data.bgm.key == "lobby");
+	if(wasLobby) stopBGM();
+
+	kkutuPreparePersonalLobbySound(file, function(ok){
+		if(!ok){
+			alert("이 오디오 파일을 재생할 수 없습니다.");
+			if(wasLobby) playBGM("lobby");
+			return;
+		}
+		kkutuSavePersonalLobbyBgm(file, function(saved){
+			if(!saved){
+				alert("브라우저 저장소에 로비 BGM을 저장하지 못했습니다.");
+				if(wasLobby) playBGM("lobby");
+				return;
+			}
+			$personalLobbyMeta = {
+				name: file.name || "개인 로비 BGM",
+				type: file.type || "",
+				size: file.size || 0,
+				updatedAt: Date.now()
+			};
+			kkutuUpdatePersonalBgmLabel();
+			if(wasLobby) playBGM("lobby");
+		});
+	});
+}
+function kkutuResetPersonalLobbyBgm(){
+	var wasLobby = !!($data.bgm && $data.bgm.key == "lobby");
+	if(wasLobby) stopBGM();
+
+	kkutuDeletePersonalLobbyBgm(function(){
+		kkutuReleasePersonalLobbySound();
+		$personalLobbyMeta = null;
+		$("#personal-lobby-bgm-file").val("");
+		kkutuUpdatePersonalBgmLabel();
+		if(wasLobby) playBGM("lobby");
+	});
+}
+
+
 /**
  * Rule the words! KKuTu Online
  * Copyright (C) 2017 JJoriping(op@jjo.kr)
@@ -76,6 +555,7 @@ $(document).ready(function(){
 	
 	$data.PUBLIC = $("#PUBLIC").html() == "true";
 	$data.URL = $("#URL").html();
+	$data.ROOM_PORT = $("#ROOM_PORT").html();
 	$data.version = $("#version").html();
 	$data.server = location.href.match(/\?.*server=(\d+)/)[1];
 	$data.shop = {};
@@ -217,32 +697,19 @@ $(document).ready(function(){
 		alert(L['websocketUnsupport']);
 		return;
 	}
-	$data._soundList = [
-		{ key: "k", value: "/media/kkutu/k.mp3" },
-		{ key: "lobby", value: "/media/kkutu/LobbyBGM.mp3" },
-		{ key: "jaqwi", value: "/media/kkutu/JaqwiBGM.mp3" },
-		{ key: "jaqwiF", value: "/media/kkutu/JaqwiFastBGM.mp3" },
-		{ key: "game_start", value: "/media/kkutu/game_start.mp3" },
-		{ key: "round_start", value: "/media/kkutu/round_start.mp3" },
-		{ key: "fail", value: "/media/kkutu/fail.mp3" },
-		{ key: "timeout", value: "/media/kkutu/timeout.mp3" },
-		{ key: "lvup", value: "/media/kkutu/lvup.mp3" },
-		{ key: "Al", value: "/media/kkutu/Al.mp3" },
-		{ key: "success", value: "/media/kkutu/success.mp3" },
-		{ key: "missing", value: "/media/kkutu/missing.mp3" },
-		{ key: "mission", value: "/media/kkutu/mission.mp3" },
-		{ key: "kung", value: "/media/kkutu/kung.mp3" },
-		{ key: "horr", value: "/media/kkutu/horr.mp3" },
-	];
-	for(i=0; i<=10; i++) $data._soundList.push(
-		{ key: "T"+i, value: "/media/kkutu/T"+i+".mp3" },
-		{ key: "K"+i, value: "/media/kkutu/K"+i+".mp3" },
-		{ key: "As"+i, value: "/media/kkutu/As"+i+".mp3" }
-	);
-	loadSounds($data._soundList, function(){
-		processShop(connect);
+	// 서버가 제공하는 모든 사운드팩을 먼저 찾고 전부 메모리에 로드한다.
+	// 이후 사운드팩 변경은 이미 로드된 bank만 교체하므로 페이지 새로고침이 필요 없다.
+	kkutuDiscoverSoundPacks(function(){
+		kkutuLoadSoundPreferences();
+		kkutuPopulateSoundPackSelect();
+		kkutuLoadAllSoundPacks(function(){
+			kkutuActivateSoundPack($data.soundPack, false);
+			// 개인 로비 BGM도 접속 전에 IndexedDB에서 불러와 준비한다.
+			kkutuLoadPersonalLobbyBgm(function(){
+				processShop(connect);
+			});
+		});
 	});
-	delete $data._soundList;
 	
 	MOREMI_PART = $("#MOREMI_PART").html().split(',');
 	AVAIL_EQUIP = $("#AVAIL_EQUIP").html().split(',');
@@ -414,6 +881,59 @@ $(document).ready(function(){
 	$(".result-me-gauge")
 		.append($("<div>").addClass("graph-bar result-me-current-bar"))
 		.append($("<div>").addClass("graph-bar result-me-bonus-bar"));
+// 최초 계정 닉네임 설정
+	function submitFirstNickname(){
+		var $input = $("#first-nickname");
+		var $button = $("#first-nickname-ok");
+		var $error = $("#first-nickname-error");
+		var nickname = $.trim($input.val() || "").replace(/\s+/g, " ");
+
+		$error.text("");
+		if(!nickname || nickname.length > 12 || /[\x00-\x1F\x7F<>"'&{}\[\]\/?.,;:|)*~`!^\-+@#$%\\=(]/.test(nickname)){
+			$error.text("닉네임은 1~12자로 입력하고 사용할 수 없는 특수문자를 제외해주세요.");
+			$input.focus();
+			return;
+		}
+
+		$button.prop("disabled", true);
+		$.post("/profile", { nickname: nickname }, function(res){
+			$button.prop("disabled", false);
+			if(res.error){
+				if(res.error == 456) $error.text("이미 사용 중인 닉네임입니다.");
+				else if(res.error == 458) $error.text("사용할 수 없는 닉네임입니다.");
+				else $error.text("닉네임 설정 중 오류가 발생했습니다. 다시 시도해주세요.");
+				$input.focus();
+				return;
+			}
+
+			var finalNickname = res.nickname || nickname;
+			var my = $data.users[$data.id];
+			$data.nickname = finalNickname;
+			$data.requireNickname = false;
+			if(my){
+				my.nickname = finalNickname;
+				if(my.profile){
+					my.profile.nickname = finalNickname;
+					my.profile.title = finalNickname;
+					my.profile.name = finalNickname;
+				}
+			}
+			send('updateProfile', { nickname: finalNickname }, true);
+			updateUserList(true);
+			$("#FirstNicknameDiag").hide();
+		}).fail(function(){
+			$button.prop("disabled", false);
+			$error.text("닉네임 설정 중 오류가 발생했습니다. 다시 시도해주세요.");
+		});
+	}
+	$("#first-nickname-ok").on('click', submitFirstNickname);
+	$("#first-nickname").on('keydown', function(e){
+		if(e.keyCode == 13){
+			e.preventDefault();
+			submitFirstNickname();
+		}
+	});
+
 // 메뉴 버튼
 	for(i in $stage.dialog){
 		if($stage.dialog[i].children(".dialog-head").hasClass("no-close")) continue;
@@ -573,6 +1093,19 @@ $(document).ready(function(){
 			$(o).html(Number($(o).val()) * rule.time + L['SECOND']);
 		});
 	}).trigger('change');
+	// Unknown Word는 Injeong/Strict/Loanword와 의미가 충돌하므로 KKuTu-N처럼 상호 배제한다.
+	$(document).on('change', '#room-unknown, #quick-unknown', function(){
+		var prefix = this.id.indexOf('quick-') === 0 ? 'quick' : 'room';
+		if($(this).is(':checked')){
+			$('#' + prefix + '-injeong, #' + prefix + '-strict, #' + prefix + '-loanword').prop('checked', false);
+		}
+	});
+	$(document).on('change', '#room-injeong, #room-strict, #room-loanword, #quick-injeong, #quick-strict, #quick-loanword', function(){
+		if(!$(this).is(':checked')) return;
+		var prefix = this.id.indexOf('quick-') === 0 ? 'quick' : 'room';
+		$('#' + prefix + '-unknown').prop('checked', false);
+	});
+
 	$stage.menu.spectate.on('click', function(e){
 		var mode = $stage.menu.spectate.hasClass("toggled");
 		
@@ -674,7 +1207,30 @@ $(document).ready(function(){
 	$stage.dialog.settingServer.on('click', function(e){
 		location.href = "/";
 	});
+	// 볼륨 슬라이더는 움직이는 즉시 현재 재생 중인 소리에 반영한다.
+	$("#volume-bgm, #volume-effect").on('input change', function(){
+		kkutuApplyLiveVolumeFromUI();
+	});
+	// 사운드팩도 선택 즉시 미리듣기/전환한다. 모든 팩은 페이지 로드 시 이미 preload 되어 있다.
+	$("#sound-pack").on('change', function(){
+		kkutuPreviewSoundPackFromUI();
+	});
+	// 개인 로비 BGM: 파일은 서버로 전송하지 않고 이 브라우저의 IndexedDB에만 저장한다.
+	$("#personal-lobby-bgm-select").on('click', function(){
+		$("#personal-lobby-bgm-file").trigger('click');
+	});
+	$("#personal-lobby-bgm-file").on('change', function(e){
+		var file = e.target.files && e.target.files[0];
+		if(file) kkutuUsePersonalLobbyBgmFile(file);
+	});
+	$("#personal-lobby-bgm-reset").on('click', function(){
+		if(!$personalLobbyMeta) return;
+		if(confirm("개인 로비 BGM을 삭제하고 사운드팩의 기본 로비 BGM으로 돌아갈까요?")){
+			kkutuResetPersonalLobbyBgm();
+		}
+	});
 	$stage.dialog.settingOK.on('click', function(e){
+		kkutuApplySoundPreferencesFromUI();
 		applyOptions({
 			mb: $("#mute-bgm").is(":checked"),
 			me: $("#mute-effect").is(":checked"),
@@ -841,13 +1397,67 @@ $(document).ready(function(){
 		});
 	});
 	$stage.dialog.dressOK.on('click', function(e){
-		$(e.currentTarget).attr('disabled', true);
-		$.post("/exordial", { data: $("#dress-exordial").val() }, function(res){
-			$stage.dialog.dressOK.attr('disabled', false);
-			if(res.error) return fail(res.error);
-			
+		var $button = $(e.currentTarget);
+		var data = {};
+		var my = $data.users[$data.id];
+		var currentNickname = $data.nickname || (my && (my.nickname || my.profile.title || my.profile.name)) || "";
+		var nickname = $.trim($("#dress-nickname").val() || "").replace(/\s+/g, " ");
+		var exordial = String($("#dress-exordial").val() || "");
+
+		$button.attr('disabled', true);
+		if(nickname !== currentNickname){
+			if(!nickname || nickname.length > 12 || /[\x00-\x1F\x7F<>"'&{}\[\]\/?.,;:|)*~`!^\-+@#$%\\=(]/.test(nickname)){
+				$button.attr('disabled', false);
+				return fail(458);
+			}
+			data.nickname = nickname;
+		}
+		if(exordial !== $data.exordial) data.exordial = exordial.slice(0, 100);
+
+		if(data.nickname === undefined && data.exordial === undefined){
+			$button.attr('disabled', false);
 			$stage.dialog.dress.hide();
-		});
+			return;
+		}
+
+		function submitProfile(){
+			$.post("/profile", data, function(res){
+				$button.attr('disabled', false);
+				if(res.error) return fail(res.error);
+
+				var live = {};
+				var messages = [];
+				if(data.nickname !== undefined){
+					var finalNickname = res.nickname || data.nickname;
+					$data.nickname = finalNickname;
+					my.nickname = finalNickname;
+					my.profile.nickname = finalNickname;
+					my.profile.title = finalNickname;
+					my.profile.name = finalNickname;
+					live.nickname = finalNickname;
+					messages.push(L.nickChanged + finalNickname + L.changed);
+				}
+				if(data.exordial !== undefined){
+					$data.exordial = data.exordial;
+					my.exordial = data.exordial;
+					live.exordial = data.exordial;
+					messages.push(L.exorChanged + data.exordial + L.changed);
+				}
+
+				send('updateProfile', live, true);
+				updateUserList(true);
+				if($data.room) updateRoom($data.room.gaming);
+				if(messages.length) alert(messages.join(" "));
+				$stage.dialog.dress.hide();
+			}).fail(function(){
+				$button.attr('disabled', false);
+			});
+		}
+
+		if(data.nickname !== undefined){
+			if(confirm(L.sureChangeNick)) submitProfile();
+			else $button.attr('disabled', false);
+		}else submitProfile();
 	});
 	$("#DressDiag .dress-type").on('click', function(e){
 		var $target = $(e.currentTarget);
@@ -1008,8 +1618,18 @@ $(document).ready(function(){
 
 // 웹소켓 연결
 	function connect(){
+		var heartbeatInterval;
 		ws = new _WebSocket($data.URL);
 		ws.onopen = function(e){
+			if(heartbeatInterval) clearInterval(heartbeatInterval);
+			heartbeatInterval = _setInterval(function(){
+				if(ws && ws.readyState === _WebSocket.OPEN){
+					ws.send(JSON.stringify({ type: 'heartbeat' }));
+				}
+				if(rws && rws.readyState === _WebSocket.OPEN){
+					rws.send(JSON.stringify({ type: 'heartbeat' }));
+				}
+			}, 20000);
 			loading();
 			/*if($data.PUBLIC && mobile) $("#ad").append($("<ins>").addClass("daum_ddn_area")
 				.css({ 'display': "none", 'margin-top': "10px", 'width': "100%" })
@@ -1032,6 +1652,7 @@ $(document).ready(function(){
 			onMessage(JSON.parse(e.data));
 		};
 		ws.onclose = function(e){
+			if(heartbeatInterval) clearInterval(heartbeatInterval);
 			var ct = L['closed'] + " (#" + e.code + ")";
 			
 			if(rws) rws.close();
@@ -1174,6 +1795,87 @@ $lib.Classic.turnEnd = function(id, data){
 		}, 500);
 	}
 	drawObtainedScore($uc, $sc).removeClass("game-user-current");
+	updateScore(id, getScore(id));
+};
+
+// 바보 모드(XBB) 전용 클라이언트 규칙. 서버의 Free 규칙과 대응한다.
+$lib.Free = {};
+$lib.Free.roundReady = function(data){
+	clearBoard();
+	$data._roundTime = $data.room.time * 1000;
+	$stage.game.display.empty().text('<undefined>');
+	$stage.game.chain.show().html($data.chain = 0);
+	if($data.room.opts.mission){
+		$stage.game.items.show().css('opacity', 1).html($data.mission = data.mission);
+	}
+	drawRound(data.round);
+	playSound('round_start');
+	recordEvent('roundReady', { data: data });
+};
+$lib.Free.turnStart = function(data){
+	// 새 턴이 시작되면 이전 입력 표시 애니메이션을 즉시 무효화하고 기본 표시로 되돌린다.
+	$data._freeDisplayGeneration = ($data._freeDisplayGeneration || 0) + 1;
+	$stage.game.display.stop(true, true).empty().text('<undefined>');
+	$data.room.game.turn = data.turn;
+	if(data.seq) $data.room.game.seq = data.seq;
+	if(!($data._tid = $data.room.game.seq[data.turn])) return;
+	if($data._tid.robot) $data._tid = $data._tid.id;
+	data.id = $data._tid;
+	$('#game-user-' + data.id).addClass('game-user-current');
+	if(!$data._replay){
+		$stage.game.here.css('display', (data.id == $data.id) ? 'block' : 'none');
+		if(data.id == $data.id){
+			if(mobile) $stage.game.hereText.val('').focus();
+			else $stage.talk.focus();
+		}
+	}
+	$stage.game.items.html($data.mission = data.mission);
+	ws.onmessage = _onMessage;
+	clearInterval($data._tTime);
+	clearTrespasses();
+	$data._chars = [];
+	$data._speed = data.speed;
+	$data._tTime = addInterval(turnGoing, TICK);
+	$data.turnTime = data.turnTime;
+	$data._turnTime = data.turnTime;
+	$data._roundTime = data.roundTime;
+	$data._turnSound = playSound('T' + data.speed);
+	recordEvent('turnStart', { data: data });
+};
+$lib.Free.turnGoing = $lib.Classic.turnGoing;
+$lib.Free.turnEnd = function(id, data){
+	var base = data.score - (data.bonus || 0);
+	var $sc = $('<div>').addClass('deltaScore').html((data.score > 0) ? ('+' + base) : data.score);
+	var $uc = $('.game-user-current');
+	if($data._turnSound) $data._turnSound.stop();
+	addScore(id, data.score);
+	clearInterval($data._tTime);
+	if(data.ok){
+		checkFailCombo();
+		clearTimeout($data._fail);
+		$stage.game.here.hide();
+		$stage.game.chain.html(++$data.chain);
+		pushDisplay(
+			data.value,
+			data.mean || "",
+			data.theme || "",
+			data.wc || "unknown"
+		);
+	}else{
+		checkFailCombo(id);
+		$sc.addClass('lost');
+		$('.game-user-current').addClass('game-user-bomb');
+		$stage.game.here.hide();
+		playSound('timeout');
+	}
+	if(data.bonus){
+		if(mobile) $sc.html('+' + base + '+' + data.bonus);
+		else addTimeout(function(){
+			var $bc = $('<div>').addClass('deltaScore bonus').html('+' + data.bonus);
+			drawObtainedScore($uc, $bc);
+		}, 500);
+	}
+	drawObtainedScore($uc, $sc).removeClass('game-user-current');
 	updateScore(id, getScore(id));
 };
 
@@ -1950,15 +2652,7 @@ function applyOptions(opt){
 	$("#only-waiting").attr('checked', $data.opts.ow);
 	$("#only-unlock").attr('checked', $data.opts.ou);
 	
-	if($data.bgm){
-		if($data.muteBGM){
-			$data.bgm.volume = 0;
-			$data.bgm.stop();
-		}else{
-			$data.bgm.volume = 1;
-			$data.bgm = playBGM($data.bgm.key, true);
-		}
-	}
+	kkutuRefreshActiveSoundVolumes();
 }
 function checkInput(){
 	/*var v = $stage.talk.val();
@@ -2018,8 +2712,11 @@ function route(func, a0, a1, a2, a3, a4){
 	$lib[r.rule][func].call(this, a0, a1, a2, a3, a4);
 }
 function connectToRoom(chan, rid){
+	// Cloudflare/WAF: room WSS uses the configured ROOM_PORTS base port.
+	// Channel 1 => ROOM_PORT, channel 2 => ROOM_PORT + 1, ...
 	var url = $data.URL.replace(/:(\d+)/, function(v, p1){
-		return ":" + (Number(p1) + 416 + Number(chan) - 1);
+		var base = $data.ROOM_PORT ? Number($data.ROOM_PORT) : Number(p1);
+		return ":" + (base + Number(chan) - 1);
 	}) + "&" + chan + "&" + rid;
 	
 	if(rws) return;
@@ -2109,13 +2806,49 @@ function onMessage(data){
 			$data._playTime = data.playTime;
 			$data._okg = data.okg;
 			$data._gaming = false;
+			$data.nickname = data.nickname || ($data.users[$data.id] && ($data.users[$data.id].nickname || $data.users[$data.id].profile.title || $data.users[$data.id].profile.name));
+			$data.exordial = (data.exordial !== undefined) ? data.exordial : (($data.users[$data.id] && $data.users[$data.id].exordial) || "");
+			$data.requireNickname = data.requireNickname === true;
 			$data.box = data.box;
 			if(data.test) alert(L['welcomeTestServer']);
 			if(location.hash[1]) tryJoin(location.hash.slice(1));
 			updateUI(undefined, true);
 			welcome();
+			if($data.requireNickname){
+				$("#first-nickname").val("");
+				$("#first-nickname-error").text("");
+				showDialog($("#FirstNicknameDiag"), true);
+				setTimeout(function(){ $("#first-nickname").focus(); }, 100);
+			}
 			if(data.caj) checkAge();
 			updateCommunity();
+			break;
+		case 'nicknameRequired':
+			$data.requireNickname = true;
+			showDialog($("#FirstNicknameDiag"), true);
+			$("#first-nickname").focus();
+			break;
+		case 'updateUser':
+			if($data.users[data.id]){
+				if(data.profile) $data.users[data.id].profile = data.profile;
+				if(data.nickname !== undefined) $data.users[data.id].nickname = data.nickname;
+				if(data.exordial !== undefined) $data.users[data.id].exordial = data.exordial;
+			}
+			if($data.usersR && $data.usersR[data.id]){
+				if(data.profile) $data.usersR[data.id].profile = data.profile;
+				if(data.nickname !== undefined) $data.usersR[data.id].nickname = data.nickname;
+				if(data.exordial !== undefined) $data.usersR[data.id].exordial = data.exordial;
+			}
+			if(data.id == $data.id){
+				if(data.nickname !== undefined) $data.nickname = data.nickname;
+				if(data.exordial !== undefined) $data.exordial = data.exordial;
+				if(data.profile){
+					$("#account-info").text(data.profile.title || data.profile.name);
+					$("#room-title").attr('placeholder', (data.profile.title || data.profile.name) + L['roomDefault']);
+				}
+			}
+			updateUserList(true);
+			if($data.room) updateRoom($data.room.gaming);
 			break;
 		case 'conn':
 			$data.setUser(data.user.id, data.user);
@@ -2394,6 +3127,7 @@ function onMessage(data){
 			}
 			alert("[#" + data.code + "] " + L['error_'+data.code] + i);
 			break;
+		case 'maintainConnection':
 		default:
 			break;
 	}
@@ -3122,7 +3856,8 @@ function drawMyDress(avGroup){
 	renderMoremi($view, my.equip);
 	$(".dress-type.selected").removeClass("selected");
 	$("#dress-type-all").addClass("selected");
-	$("#dress-exordial").val(my.exordial);
+	$("#dress-nickname").val(my.nickname || my.profile.title || my.profile.name || "");
+	$("#dress-exordial").val(my.exordial || "");
 	drawMyGoods(avGroup || true);
 }
 function renderGoods($target, preId, filter, equip, onClick){
@@ -4167,6 +4902,18 @@ function vibrate(level){
 function pushDisplay(text, mean, theme, wc){
 	var len;
 	var mode = MODE[$data.room.mode];
+	var isFreeDisplay = mode == "XBB";
+	var freeDisplayGeneration = 0;
+	if(isFreeDisplay){
+		freeDisplayGeneration = $data._freeDisplayGeneration = ($data._freeDisplayGeneration || 0) + 1;
+	}
+	function freeDisplayExpired(){
+		return isFreeDisplay && freeDisplayGeneration != $data._freeDisplayGeneration;
+	}
+	// Unknown Word는 사전에 없는 임의 문자열을 허용하므로 HTML 메타문자를 전각으로 표시해 삽입을 막는다.
+	if($data.room && (($data.room.opts && $data.room.opts.unknown) || MODE[$data.room.mode] == "XBB")){
+		text = String(text).replace(/&/g, "＆").replace(/</g, "＜").replace(/>/g, "＞");
+	}
 	var isKKT = mode == "KKT";
 	var isRev = mode == "KAP";
 	var beat = BEAT[len = text.length];
@@ -4200,6 +4947,7 @@ function pushDisplay(text, mean, theme, wc){
 			);
 			j++;
 			addTimeout(function($l, snd){
+				if(freeDisplayExpired()) return;
 				var anim = { 'margin-top': 0 };
 				
 				playSound(snd);
@@ -4219,6 +4967,7 @@ function pushDisplay(text, mean, theme, wc){
 		j = "";
 		if(isRev) for(i=0; i<len; i++){
 			addTimeout(function(t){
+				if(freeDisplayExpired()) return;
 				playSound(ta);
 				if(t == $data.mission){
 					playSound('mission');
@@ -4231,6 +4980,7 @@ function pushDisplay(text, mean, theme, wc){
 		}
 		else for(i=0; i<len; i++){
 			addTimeout(function(t){
+				if(freeDisplayExpired()) return;
 				playSound(ta);
 				if(t == $data.mission){
 					playSound('mission');
@@ -4243,8 +4993,10 @@ function pushDisplay(text, mean, theme, wc){
 		}
 	}
 	addTimeout(function(){
-		for(i=0; i<3; i++){
+		var expired = freeDisplayExpired();
+		if(!expired) for(i=0; i<3; i++){
 			addTimeout(function(v){
+				if(freeDisplayExpired()) return;
 				if(isKKT){
 					if(v == 1) return;
 					else playSound('kung');
@@ -4255,7 +5007,7 @@ function pushDisplay(text, mean, theme, wc){
 			}, i * tick * 2, i);
 		}
 		addTimeout(pushHistory, tick * 4, text, mean, theme, wc);
-		if(!isKKT) playSound(kkt);
+		if(!expired && !isKKT) playSound(kkt);
 	}, sg);
 }
 function pushHint(hint){
@@ -4433,47 +5185,90 @@ function loadSounds(list, callback){
 	$data._lsRemain = list.length;
 	
 	list.forEach(function(v){
-		getAudio(v.key, v.value, callback);
+		getAudio(v.key, v.value, callback, v.fallback);
 	});
 }
-function getAudio(k, url, cb){
+function getAudio(k, url, cb, fallbackUrl){
 	var req = new XMLHttpRequest();
-	
-	req.open("GET", /*($data.PUBLIC ? "http://jjo.kr" : "") +*/ url);
-	req.responseType = "arraybuffer";
-	req.onload = function(e){
-		if(audioContext) audioContext.decodeAudioData(e.target.response, function(buf){
-			$sound[k] = buf;
-			done();
-		}, onErr); else onErr();
-	};
-	function onErr(err){
-		$sound[k] = new AudioSound(url);
-		done();
-	}
-	function done(){
+	var completed = false;
+
+	function doneWith(sound){
+		if(completed) return;
+		completed = true;
+		$sound[k] = sound;
 		if(--$data._lsRemain == 0){
 			if(cb) cb();
 		}else loading(L['loadRemain'] + $data._lsRemain);
 	}
-	function AudioSound(url){
+	function useFallback(){
+		if(completed) return;
+		if(fallbackUrl && fallbackUrl != url){
+			completed = true;
+			getAudio(k, fallbackUrl, cb, null);
+			return;
+		}
+		doneWith(new AudioSound(url));
+	}
+	function AudioSound(audioUrl){
 		var my = this;
-		
-		this.audio = new Audio(url);
+		this.audio = new Audio(audioUrl);
 		this.audio.load();
 		this.start = function(){
-			my.audio.play();
+			my.audio.volume = kkutuSoundVolume(!!my._kkutuLoop);
+			var p = my.audio.play();
+			if(p && p.catch) p.catch(function(){});
 		};
 		this.stop = function(){
 			my.audio.currentTime = 0;
 			my.audio.pause();
 		};
 	}
+
+	req.open("GET", url);
+	req.responseType = "arraybuffer";
+	// Cloudflare/proxy 환경에서 특정 MP3 요청이 응답 없이 멈춰
+	// 전체 로딩이 "앞으로 1"에서 정지하는 것을 방지한다.
+	req.timeout = 8000;
+	req.ontimeout = function(){
+		console.warn("[Sound preload timeout]", k, url);
+		useFallback();
+	};
+	req.onabort = function(){
+		console.warn("[Sound preload aborted]", k, url);
+		useFallback();
+	};
+	req.onload = function(e){
+		if(req.status && (req.status < 200 || req.status >= 300)){
+			useFallback();
+			return;
+		}
+		if(audioContext){
+			audioContext.decodeAudioData(e.target.response, function(buf){
+				doneWith(buf);
+			}, function(){
+				useFallback();
+			});
+		}else{
+			doneWith(new AudioSound(url));
+		}
+	};
+	req.onerror = function(){
+		console.warn("[Sound preload error]", k, url);
+		useFallback();
+	};
 	req.send();
 }
 function playBGM(key, force){
 	if($data.bgm) $data.bgm.stop();
-	
+
+	// 개인 로비 BGM이 있으면 사운드팩의 LobbyBGM.mp3보다 우선한다.
+	if(key == "lobby" && $personalLobbySound){
+		var originalLobby = $sound.lobby;
+		$sound.lobby = $personalLobbySound;
+		$data.bgm = playSound(key, true);
+		$sound.lobby = originalLobby;
+		return $data.bgm;
+	}
 	return $data.bgm = playSound(key, true);
 }
 function stopBGM(){
@@ -4483,35 +5278,32 @@ function stopBGM(){
 	}
 }
 function playSound(key, loop){
-	var src, sound;
-	var mute = (loop && $data.muteBGM) || (!loop && $data.muteEff);
-	
+	var src, sound, gain;
+	var volume = kkutuSoundVolume(!!loop);
+
 	sound = $sound[key] || $sound.missing;
 	if(window.hasOwnProperty("AudioBuffer") && sound instanceof AudioBuffer){
 		src = audioContext.createBufferSource();
+		gain = audioContext.createGain();
 		src.startedAt = audioContext.currentTime;
 		src.loop = loop;
-		if(mute){
-			src.buffer = audioContext.createBuffer(2, sound.length, audioContext.sampleRate);
-		}else{
-			src.buffer = sound;
-		}
-		src.connect(audioContext.destination);
+		src.buffer = sound;
+		gain.gain.value = volume;
+		src.connect(gain);
+		gain.connect(audioContext.destination);
+		src._kkutuGain = gain;
 	}else{
-		if(sound.readyState) sound.audio.currentTime = 0;
+		if(sound.audio.currentTime) sound.audio.currentTime = 0;
 		sound.audio.loop = loop || false;
-		sound.audio.volume = mute ? 0 : 1;
+		sound.audio.volume = volume;
 		src = sound;
 	}
 	if($_sound[key]) $_sound[key].stop();
 	$_sound[key] = src;
 	src.key = key;
+	src._kkutuLoop = !!loop;
 	src.start();
-	/*if(sound.readyState) sound.currentTime = 0;
-	sound.loop = loop || false;
-	sound.volume = ((loop && $data.muteBGM) || (!loop && $data.muteEff)) ? 0 : 1;
-	sound.play();*/
-	
+
 	return src;
 }
 function stopAllSounds(){

@@ -146,9 +146,9 @@ function route(func, a0, a1, a2, a3, a4){
 }
 function connectToRoom(chan, rid){
 	var url = $data.URL.replace(/:(\d+)/, function(v, p1){
-		return ":" + (Number(p1) + 416 + Number(chan) - 1);
+		return ":" + $data.ROOM_PORT || (Number(p1) + 416 + Number(chan) - 1);
 	}) + "&" + chan + "&" + rid;
-	
+
 	if(rws) return;
 	rws = new _WebSocket(url);
 	
@@ -236,6 +236,8 @@ function onMessage(data){
 			$data._playTime = data.playTime;
 			$data._okg = data.okg;
 			$data._gaming = false;
+			$data.nickname = data.nickname || ($data.users[$data.id] && ($data.users[$data.id].nickname || $data.users[$data.id].profile.title || $data.users[$data.id].profile.name));
+			$data.exordial = (data.exordial !== undefined) ? data.exordial : (($data.users[$data.id] && $data.users[$data.id].exordial) || "");
 			$data.box = data.box;
 			if(data.test) alert(L['welcomeTestServer']);
 			if(location.hash[1]) tryJoin(location.hash.slice(1));
@@ -243,6 +245,28 @@ function onMessage(data){
 			welcome();
 			if(data.caj) checkAge();
 			updateCommunity();
+			break;
+		case 'updateUser':
+			if($data.users[data.id]){
+				if(data.profile) $data.users[data.id].profile = data.profile;
+				if(data.nickname !== undefined) $data.users[data.id].nickname = data.nickname;
+				if(data.exordial !== undefined) $data.users[data.id].exordial = data.exordial;
+			}
+			if($data.usersR && $data.usersR[data.id]){
+				if(data.profile) $data.usersR[data.id].profile = data.profile;
+				if(data.nickname !== undefined) $data.usersR[data.id].nickname = data.nickname;
+				if(data.exordial !== undefined) $data.usersR[data.id].exordial = data.exordial;
+			}
+			if(data.id == $data.id){
+				if(data.nickname !== undefined) $data.nickname = data.nickname;
+				if(data.exordial !== undefined) $data.exordial = data.exordial;
+				if(data.profile){
+					$("#account-info").text(data.profile.title || data.profile.name);
+					$("#room-title").attr('placeholder', (data.profile.title || data.profile.name) + L['roomDefault']);
+				}
+			}
+			updateUserList(true);
+			if($data.room) updateRoom($data.room.gaming);
 			break;
 		case 'conn':
 			$data.setUser(data.user.id, data.user);
@@ -521,6 +545,7 @@ function onMessage(data){
 			}
 			alert("[#" + data.code + "] " + L['error_'+data.code] + i);
 			break;
+		case 'maintainConnection':
 		default:
 			break;
 	}
@@ -1249,7 +1274,8 @@ function drawMyDress(avGroup){
 	renderMoremi($view, my.equip);
 	$(".dress-type.selected").removeClass("selected");
 	$("#dress-type-all").addClass("selected");
-	$("#dress-exordial").val(my.exordial);
+	$("#dress-nickname").val(my.nickname || my.profile.title || my.profile.name || "");
+	$("#dress-exordial").val(my.exordial || "");
 	drawMyGoods(avGroup || true);
 }
 function renderGoods($target, preId, filter, equip, onClick){

@@ -61,6 +61,56 @@ const ENABLE_FORM = exports.ENABLE_FORM = [ "S", "J" ];
 const MODE_LENGTH = exports.MODE_LENGTH = Const.GAME_TYPE.length;
 const PORT = process.env['KKUTU_PORT'];
 
+/* Chat link blocking [S] */
+function isAllowedChatHost(host){
+	host = String(host || "").toLowerCase().replace(/\.$/, "");
+	var allowed = [ "kkutugame.kr", "parkeolru.com", "kkutu.pe.kr" ];
+	for(var i=0; i<allowed.length; i++){
+		if(host === allowed[i] || host.slice(-(allowed[i].length + 1)) === "." + allowed[i]) return true;
+	}
+	return false;
+}
+function hasBlockedChatLink(value){
+	if(typeof value != "string") return false;
+
+	// zero-width 문자와 유니코드 점을 정규화하고, 공백 삽입 우회도 검사한다.
+	var text = value
+		.replace(/[\u200B-\u200D\u2060\uFEFF]/g, "")
+		.replace(/[。．｡]/g, ".")
+		.toLowerCase();
+	var compact = text.replace(/\s+/g, "");
+	var m;
+
+	// http/https/ftp 링크의 호스트를 직접 검사한다.
+	var schemeHost = /(?:https?|ftp):\/\/([^\/?#:]+)(?::\d{2,5})?/gi;
+	while((m = schemeHost.exec(compact))){
+		if(!isAllowedChatHost(m[1])) return true;
+	}
+
+	// 일반 도메인(example.com, example.co.kr 등)도 검사한다.
+	var domain = /(?:^|[^a-z0-9@_-])((?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,24})(?=[^a-z0-9-]|$)/gi;
+	while((m = domain.exec(compact))){
+		if(!isAllowedChatHost(m[1])) return true;
+	}
+
+	// IP 주소 기반 링크는 모두 차단한다.
+	if(/(?:^|[^\d])(?:\d{1,3}\.){3}\d{1,3}(?::\d{2,5})?(?:\/[^\s]*)?/i.test(compact)) return true;
+
+	return false;
+}
+function rejectBlockedChatLink(client, value){
+	if(!hasBlockedChatLink(value)) return false;
+
+	JLog.warn(`[ChatLinkBlock] #${client.id}: ${value}`);
+	client.send('chat', {
+		profile: { title: "시스템" },
+		value: "채팅에 허용되지 않은 링크를 올릴 수 없습니다."
+	});
+	return true;
+}
+/* Chat link blocking [E] */
+
+
 process.on('uncaughtException', function(err){
 	var text = `:${PORT} [${new Date().toLocaleString()}] ERROR: ${err.toString()}\n${err.stack}\n`;
 	
@@ -257,6 +307,13 @@ Cluster.on('message', function(worker, msg){
 			DIC[msg.target]._invited = msg.place;
 			DIC[msg.target].send('invited', { from: msg.place });
 			break;
+		case "room-reserved":
+			// Room worker가 RESERVED 등록을 끝낸 뒤 클라이언트에게 접속 지시.
+			// Cloudflare 443 gateway에서 빠른 재접속으로 생기는 예약 race를 방지한다.
+			if(DIC[msg.target] && msg.preRoom){
+				DIC[msg.target].send('preRoom', msg.preRoom);
+			}
+			break;
 		case "room-new":
 			if(ROOM[msg.room.id] || !DIC[msg.target]){ // 이미 그런 ID의 방이 있다... 그 방은 없던 걸로 해라.
 				worker.send({ type: "room-invalid", room: msg.room });
@@ -336,7 +393,7 @@ exports.init = function(_SID, CHAN){
 		JLog.success("Master DB is ready.");
 		
 		MainDB.users.update([ 'server', SID ]).set([ 'server', "" ]).on();
-		if(Const.IS_SECURED) {
+		if(Const.IS_SECURED || (Const.WAF && !Const.WAF_GATEWAY)) {
 			const options = Secure();
 			HTTPS_Server = https.createServer(options)
 				.listen(global.test ? (Const.TEST_PORT + 416) : process.env['KKUTU_PORT']);
@@ -374,7 +431,9 @@ exports.init = function(_SID, CHAN){
 				$c = new KKuTu.Client(socket, $body ? $body.profile : null, key);
 				$c.admin = GLOBAL.ADMIN.indexOf($c.id) != -1;
 				/* Enhanced User Block System [S] */
-				$c.remoteAddress = GLOBAL.USER_BLOCK_OPTIONS.USE_X_FORWARDED_FOR ? info.connection.remoteAddress : (info.headers['x-forwarded-for'] || info.connection.remoteAddress);
+				$c.remoteAddress = Const.WAF
+					? (info.headers['cf-connecting-ip'] || info.headers['x-forwarded-for'] || info.connection.remoteAddress)
+					: (GLOBAL.USER_BLOCK_OPTIONS.USE_X_FORWARDED_FOR ? (info.headers['x-forwarded-for'] || info.connection.remoteAddress) : info.connection.remoteAddress);
 				/* Enhanced User Block System [E] */
 				
 				if(DIC[$c.id]){
@@ -489,6 +548,9 @@ function joinNewUser($c) {
 		rooms: KKuTu.getRoomList(),
 		friends: $c.friends,
 		admin: $c.admin,
+		nickname: $c.nickname,
+		exordial: $c.exordial,
+		requireNickname: $c.requireNickname === true,
 		test: global.test,
 		caj: $c._checkAjae ? true : false
 	});
@@ -500,6 +562,12 @@ function joinNewUser($c) {
 
 KKuTu.onClientMessage = function ($c, msg) {
 	if (!msg) return;
+
+	// Cloudflare/WAF WebSocket keepalive. Handle this before reCAPTCHA gating.
+	if (msg.type === 'heartbeat') {
+		$c._lastHeartbeat = Date.now();
+		return;
+	}
 	
 	if ($c.passRecaptcha) {
 		processClientRequest($c, msg);
@@ -527,6 +595,12 @@ function processClientRequest($c, msg) {
 	var stable = true;
 	var temp;
 	var now = (new Date()).getTime();
+
+	// 최초 닉네임을 정하기 전에는 프로필 설정 외의 게임 동작을 허용하지 않는다.
+	if($c.requireNickname && msg.type !== 'updateProfile' && msg.type !== 'refresh'){
+		$c.send('nicknameRequired');
+		return;
+	}
 	
 	switch (msg.type) {
 		case 'yell':
@@ -546,6 +620,8 @@ function processClientRequest($c, msg) {
 				return;
 			}
 			msg.value = msg.value.substr(0, 200);
+			// 관리자 #명령은 채팅이 아니므로 링크 검사 대상에서 제외한다.
+			if (!($c.admin && msg.value.charAt(0) == "#") && rejectBlockedChatLink($c, msg.value)) return;
 			if ($c.admin) {
 				if (!processAdmin($c.id, msg.value)) break;
 			}
@@ -669,6 +745,28 @@ function processClientRequest($c, msg) {
 		case 'test':
 			checkTailUser($c.id, $c.place, msg);
 			break;
+		case 'updateProfile':
+			if($c.guest || !$c.profile) return;
+
+			var exordialUpdate = (msg.exordial !== undefined && msg.exordial !== null) ? String(msg.exordial).slice(0, 100) : undefined;
+			if(msg.nickname !== undefined && msg.nickname !== null){
+				var claimedNickname = String(msg.nickname).trim().slice(0, 12);
+				MainDB.users.findOne([ '_id', $c.id ]).on(function(row){
+					var safeProfile = {};
+					if(exordialUpdate !== undefined) safeProfile.exordial = exordialUpdate;
+					if(row && row.nickname === claimedNickname){
+						var oldName = ($c.profile.title || $c.profile.name || "").replace(/\s/g, "");
+						if(oldName && DNAME[oldName] === $c.id) delete DNAME[oldName];
+						safeProfile.nickname = claimedNickname;
+						$c.requireNickname = row.requireNickname === true;
+						DNAME[claimedNickname.replace(/\s/g, "")] = $c.id;
+					}
+					$c.updateProfile(safeProfile);
+				});
+			}else if(exordialUpdate !== undefined){
+				$c.updateProfile({ exordial: exordialUpdate });
+			}
+			break;
 		default:
 			break;
 	}
@@ -677,7 +775,7 @@ function processClientRequest($c, msg) {
 KKuTu.onClientClosed = function($c, code){
 	delete DIC[$c.id];
 	if($c._error != 409) MainDB.users.update([ '_id', $c.id ]).set([ 'server', "" ]).on();
-	if($c.profile) delete DNAME[$c.profile.title || $c.profile.name];
+	if($c.profile) delete DNAME[($c.profile.title || $c.profile.name || "").replace(/\s/g, "")];
 	if($c.socket) $c.socket.removeAllListeners();
 	if($c.friends) narrateFriends($c.id, $c.friends, "off");
 	KKuTu.publish('disconn', { id: $c.id });

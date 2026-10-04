@@ -7,3 +7,16 @@ Server/lib/Web/public/js/**
 Server/lib/sub/auth.json
 Server/lib/sub/global.json
 .vscode
+
+# Private/local configuration and credentials
+ssl/
+.env
+.env.*
+*.pem
+*.key
+*.pfx
+*.p12
+
+# Local runtime artifacts
+KKUTU_ERROR.log
+Server/lib/Web/public/roblox-oauth-review.mp4

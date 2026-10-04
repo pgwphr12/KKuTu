@@ -142,13 +142,18 @@ span{
 }
 #account-info:hover{ color: #EEEEEE; }
 #global-notice{
+	position: relative;
 	padding: 3px 0px;
 	margin-top: 30px;
 	color: #111111;
 	text-align: center;
 	font-weight: bold;
 	background-color: #EEBB33;
+	cursor: pointer;
 	z-index: 5;
+}
+#gn-content{
+	cursor: pointer;
 }
 .searching{
 	color: #EEEEEE;
@@ -347,3 +352,9 @@ code{
 .tier-D{ color: #96C7F9; text-shadow: 0px 0px 3px #88BBEE; }
 .tier-M{ color: #2AC9AF; text-shadow: 0px 0px 5px #11AA88; }
 .tier-C{ color: #2EFFDF; text-shadow: 0px 0px 5px #1072AA; }
+
+/* 서버 목록(끄투커넥트) 버튼 폭 확장 */
+#menu-item-SERVERLIST{
+	width: 170px;
+	white-space: nowrap;
+}

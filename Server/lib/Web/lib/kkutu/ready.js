@@ -21,6 +21,7 @@ $(document).ready(function(){
 	
 	$data.PUBLIC = $("#PUBLIC").html() == "true";
 	$data.URL = $("#URL").html();
+	$data.ROOM_PORT = $("#ROOM_PORT").html();
 	$data.version = $("#version").html();
 	$data.server = location.href.match(/\?.*server=(\d+)/)[1];
 	$data.shop = {};
@@ -786,13 +787,67 @@ $(document).ready(function(){
 		});
 	});
 	$stage.dialog.dressOK.on('click', function(e){
-		$(e.currentTarget).attr('disabled', true);
-		$.post("/exordial", { data: $("#dress-exordial").val() }, function(res){
-			$stage.dialog.dressOK.attr('disabled', false);
-			if(res.error) return fail(res.error);
-			
+		var $button = $(e.currentTarget);
+		var data = {};
+		var my = $data.users[$data.id];
+		var currentNickname = $data.nickname || (my && (my.nickname || my.profile.title || my.profile.name)) || "";
+		var nickname = $.trim($("#dress-nickname").val() || "").replace(/\s+/g, " ");
+		var exordial = String($("#dress-exordial").val() || "");
+
+		$button.attr('disabled', true);
+		if(nickname !== currentNickname){
+			if(!nickname || nickname.length > 12 || /[\x00-\x1F\x7F<>"'&{}\[\]\/?.,;:|)*~`!^\-+@#$%\\=(]/.test(nickname)){
+				$button.attr('disabled', false);
+				return fail(458);
+			}
+			data.nickname = nickname;
+		}
+		if(exordial !== $data.exordial) data.exordial = exordial.slice(0, 100);
+
+		if(data.nickname === undefined && data.exordial === undefined){
+			$button.attr('disabled', false);
 			$stage.dialog.dress.hide();
-		});
+			return;
+		}
+
+		function submitProfile(){
+			$.post("/profile", data, function(res){
+				$button.attr('disabled', false);
+				if(res.error) return fail(res.error);
+
+				var live = {};
+				var messages = [];
+				if(data.nickname !== undefined){
+					var finalNickname = res.nickname || data.nickname;
+					$data.nickname = finalNickname;
+					my.nickname = finalNickname;
+					my.profile.nickname = finalNickname;
+					my.profile.title = finalNickname;
+					my.profile.name = finalNickname;
+					live.nickname = finalNickname;
+					messages.push(L.nickChanged + finalNickname + L.changed);
+				}
+				if(data.exordial !== undefined){
+					$data.exordial = data.exordial;
+					my.exordial = data.exordial;
+					live.exordial = data.exordial;
+					messages.push(L.exorChanged + data.exordial + L.changed);
+				}
+
+				send('updateProfile', live, true);
+				updateUserList(true);
+				if($data.room) updateRoom($data.room.gaming);
+				if(messages.length) alert(messages.join(" "));
+				$stage.dialog.dress.hide();
+			}).fail(function(){
+				$button.attr('disabled', false);
+			});
+		}
+
+		if(data.nickname !== undefined){
+			if(confirm(L.sureChangeNick)) submitProfile();
+			else $button.attr('disabled', false);
+		}else submitProfile();
 	});
 	$("#DressDiag .dress-type").on('click', function(e){
 		var $target = $(e.currentTarget);
@@ -956,22 +1011,6 @@ $(document).ready(function(){
 		ws = new _WebSocket($data.URL);
 		ws.onopen = function(e){
 			loading();
-			/*if($data.PUBLIC && mobile) $("#ad").append($("<ins>").addClass("daum_ddn_area")
-				.css({ 'display': "none", 'margin-top': "10px", 'width': "100%" })
-				.attr({
-					'data-ad-unit': "DAN-1ib8r0w35a0qb",
-					'data-ad-media': "4I8",
-					'data-ad-pubuser': "3iI",
-					'data-ad-type': "A",
-					'data-ad-width': "320",
-					'data-ad-height': "100"
-				})
-			).append($("<script>")
-				.attr({
-					'type': "text/javascript",
-					'src': "//t1.daumcdn.net/adfit/static/ad.min.js"
-				})
-			);*/
 		};
 		ws.onmessage = _onMessage = function(e){
 			onMessage(JSON.parse(e.data));
