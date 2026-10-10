@@ -356,7 +356,7 @@ function kkutuMakeBlobAudioSound(blob){
 	my.audio.load();
 	my._kkutuObjectUrl = url;
 	my.start = function(){
-		my.audio.volume = kkutuSoundVolume(true);
+		my.audio.volume = kkutuSoundVolume(!!my._kkutuLoop);
 		var p = my.audio.play();
 		if(p && p.catch) p.catch(function(){});
 	};
@@ -530,6 +530,226 @@ function kkutuResetPersonalLobbyBgm(){
 		if(wasLobby) playBGM("lobby");
 	});
 }
+/* Personal audio override for all 48 stock sound names (browser-only).
+ * File names MUST match kkutuSoundDefinitions(), including case (Al != AI, k != K0).
+ * Files are only written to this browser's IndexedDB, never uploaded to the web server.
+ */
+var KKUTU_PERSONAL_AUDIO_DB = "kkutu_personal_audio_v1";
+var KKUTU_PERSONAL_AUDIO_STORE = "tracks";
+var KKUTU_PERSONAL_AUDIO_MAX_FILE = 25 * 1024 * 1024;
+var $personalAudioSounds = {};
+var $personalAudioMeta = {};
+var $personalAudioBusy = false;
+function kkutuOpenPersonalAudioDB(ok, fail){
+	if(!window.indexedDB){ if(fail) fail(new Error("IndexedDB를 지원하지 않습니다.")); return; }
+	var req = indexedDB.open(KKUTU_PERSONAL_AUDIO_DB, 1);
+	req.onupgradeneeded = function(e){
+		var db = e.target.result;
+		if(!db.objectStoreNames.contains(KKUTU_PERSONAL_AUDIO_STORE))
+			db.createObjectStore(KKUTU_PERSONAL_AUDIO_STORE, { keyPath: "id" });
+	};
+	req.onsuccess = function(e){ ok(e.target.result); };
+	req.onerror = function(e){ if(fail) fail(e.target.error || e); };
+}
+function kkutuPersonalAudioDefinitions(){ return kkutuSoundDefinitions(); }
+function kkutuPersonalAudioFileMap(){
+	var map = {};
+	kkutuPersonalAudioDefinitions().forEach(function(def){ map[def.file] = def.key; });
+	return map;
+}
+function kkutuReleasePersonalAudioSound(key){
+	var sound = $personalAudioSounds[key];
+	if(sound && sound._kkutuObjectUrl){
+		try{ URL.revokeObjectURL(sound._kkutuObjectUrl); }catch(e){}
+	}
+	delete $personalAudioSounds[key];
+	delete $personalAudioMeta[key];
+}
+function kkutuSetPersonalAudioRow(row){
+	if(!row || !row.blob) return;
+	kkutuReleasePersonalAudioSound(row.id);
+	$personalAudioSounds[row.id] = kkutuMakeBlobAudioSound(row.blob);
+	$personalAudioMeta[row.id] = {name: row.name, size: row.size, updatedAt: row.updatedAt};
+}
+function kkutuRefreshPersonalAudioBGM(keys){
+	var playing = $data.bgm && $data.bgm.key;
+	if(playing && keys.indexOf(playing) !== -1) playBGM(playing);
+}
+function kkutuLoadPersonalAudio(callback){
+	kkutuOpenPersonalAudioDB(function(db){
+		var tx = db.transaction(KKUTU_PERSONAL_AUDIO_STORE, "readonly");
+		var req = tx.objectStore(KKUTU_PERSONAL_AUDIO_STORE).getAll();
+		req.onsuccess = function(){
+			(req.result || []).forEach(function(row){
+				// Ignore stale or unknown filenames, but never affect the default sound bank.
+				var defs = kkutuPersonalAudioFileMap();
+				if(defs[row.name] === row.id) kkutuSetPersonalAudioRow(row);
+			});
+		};
+		tx.oncomplete = function(){ db.close(); if(callback) callback(); };
+		tx.onerror = function(){ db.close(); if(callback) callback(); };
+	}, function(){ if(callback) callback(); });
+}
+function kkutuPersonalAudioFileSize(size){
+	return size >= 1048576 ? (size / 1048576).toFixed(1) + " MB" : Math.ceil(size / 1024) + " KB";
+}
+function kkutuPersonalAudioSetMessage(message, error){
+	$("#personal-audio-status").text(message).css("color", error ? "#c53a3a" : "#53606e");
+}
+function kkutuPersonalAudioRender(){
+	var defs = kkutuPersonalAudioDefinitions();
+	var $list = $("#personal-audio-list");
+	if(!$list.length) return;
+	$list.empty();
+	defs.forEach(function(def){
+		var meta = $personalAudioMeta[def.key];
+		var legacy = !meta && def.key === "lobby" && $personalLobbyMeta;
+		var $item = $("<div>").addClass("kkutu-personal-audio-track");
+		var $name = $("<span>").addClass("kkutu-personal-audio-track-name").text(def.file);
+		var $state = $("<span>").addClass("kkutu-personal-audio-track-state")
+			.text(meta ? "개인 설정 · " + kkutuPersonalAudioFileSize(meta.size || 0) : (legacy ? "기존 로비 BGM 적용 중" : "기본 사운드팩"));
+		$item.append($name, $state);
+		if(meta || legacy){
+			$item.append($("<button>").attr({type:"button", "data-audio-reset":def.key})
+				.text("복원").attr("title", "이 음원만 기본 사운드팩으로 복원"));
+		}
+		$list.append($item);
+	});
+	var count = Object.keys($personalAudioMeta).length;
+	$("#personal-audio-count").text("개인 음원 " + count + " / " + defs.length + "개");
+}
+function kkutuPersonalAudioImport(files, folder){
+	if($personalAudioBusy) return;
+	var map = kkutuPersonalAudioFileMap();
+	var matched = {}, unknown = [], duplicated = [], tooBig = [], names=[];
+	Array.prototype.forEach.call(files || [],function(file){
+		var key = map[file.name];
+		if(!key){ unknown.push(file.webkitRelativePath || file.name); return; }
+		if(matched[key]){ duplicated.push(file.webkitRelativePath || file.name); return; }
+		if(file.size > KKUTU_PERSONAL_AUDIO_MAX_FILE){ tooBig.push(file.name); return; }
+		matched[key] = file;
+		names.push(key);
+	});
+	if(!names.length){
+		kkutuPersonalAudioSetMessage("일치하는 MP3가 없습니다. 파일명과 대소문자를 확인하세요. " + (unknown.length ? "미인식 " + unknown.length + "개" : ""), true);
+		return;
+	}
+	$personalAudioBusy = true;
+	kkutuPersonalAudioSetMessage("개인 브라우저 저장소에 " + names.length + "개 저장 중…", false);
+	kkutuOpenPersonalAudioDB(function(db){
+		var tx = db.transaction(KKUTU_PERSONAL_AUDIO_STORE, "readwrite");
+		var store = tx.objectStore(KKUTU_PERSONAL_AUDIO_STORE);
+		names.forEach(function(key){
+			var file = matched[key];
+			store.put({ id:key, name:file.name, size:file.size, updatedAt:Date.now(), blob:file });
+		});
+		tx.oncomplete = function(){
+			db.close();
+			names.forEach(function(key){
+				var file = matched[key];
+				kkutuSetPersonalAudioRow({id:key,name:file.name,size:file.size,updatedAt:Date.now(),blob:file});
+			});
+			$personalAudioBusy = false;
+			kkutuRefreshPersonalAudioBGM(names);
+			kkutuPersonalAudioRender();
+			var missing = kkutuPersonalAudioDefinitions().length - Object.keys($personalAudioMeta).length;
+			kkutuPersonalAudioSetMessage(names.length + "개 저장 완료" + (folder ? " (폴더 일괄 등록)" : "") + ". 미등록 " + missing + "개" + (unknown.length ? " · 이름 불일치 " + unknown.length + "개" : "") + (duplicated.length ? " · 중복 " + duplicated.length + "개" : "") + (tooBig.length ? " · 용량 초과 " + tooBig.length + "개" : ""), false);
+		};
+		tx.onerror = function(){ db.close(); $personalAudioBusy=false; kkutuPersonalAudioSetMessage("저장 실패: 브라우저 저장 용량 또는 권한을 확인하세요.", true); };
+		tx.onabort = function(){ db.close(); $personalAudioBusy=false; kkutuPersonalAudioSetMessage("저장이 중단됐습니다. 브라우저 저장 용량을 확인하세요.", true); };
+	}, function(){ $personalAudioBusy=false; kkutuPersonalAudioSetMessage("브라우저 저장소를 열지 못했습니다.", true); });
+}
+function kkutuPersonalAudioReset(key){
+	if($personalAudioBusy) return;
+	var isLegacy = key === "lobby" && !$personalAudioMeta.lobby && $personalLobbyMeta;
+	if(isLegacy){
+		kkutuResetPersonalLobbyBgm();
+		kkutuPersonalAudioSetMessage("기존 로비 BGM을 기본으로 복원했습니다.", false);
+		setTimeout(kkutuPersonalAudioRender, 50);
+		return;
+	}
+	kkutuOpenPersonalAudioDB(function(db){
+		var tx = db.transaction(KKUTU_PERSONAL_AUDIO_STORE, "readwrite");
+		tx.objectStore(KKUTU_PERSONAL_AUDIO_STORE).delete(key);
+		tx.oncomplete = function(){
+			db.close(); kkutuReleasePersonalAudioSound(key); kkutuRefreshPersonalAudioBGM([key]);
+			kkutuPersonalAudioRender(); kkutuPersonalAudioSetMessage("기본 사운드팩으로 복원했습니다.", false);
+		};
+		tx.onerror = function(){ db.close(); kkutuPersonalAudioSetMessage("복원에 실패했습니다.", true); };
+	}, function(){ kkutuPersonalAudioSetMessage("브라우저 저장소를 열지 못했습니다.", true); });
+}
+function kkutuPersonalAudioResetAll(){
+	if($personalAudioBusy) return;
+	if(!confirm("등록한 개인 음원 전체를 삭제하고 기본 사운드팩으로 복원할까요?")) return;
+	kkutuOpenPersonalAudioDB(function(db){
+		var tx = db.transaction(KKUTU_PERSONAL_AUDIO_STORE, "readwrite");
+		tx.objectStore(KKUTU_PERSONAL_AUDIO_STORE).clear();
+		tx.oncomplete = function(){
+			db.close();
+			var keys = Object.keys($personalAudioSounds);
+			keys.forEach(kkutuReleasePersonalAudioSound);
+			kkutuRefreshPersonalAudioBGM(keys);
+			kkutuPersonalAudioRender();
+			kkutuPersonalAudioSetMessage("개인 음원을 모두 복원했습니다." + ($personalLobbyMeta ? " (기존 개인 로비 BGM은 유지)" : ""), false);
+		};
+		tx.onerror = function(){ db.close(); kkutuPersonalAudioSetMessage("복원에 실패했습니다.", true); };
+	}, function(){ kkutuPersonalAudioSetMessage("브라우저 저장소를 열지 못했습니다.", true); });
+}
+function kkutuPersonalAudioShow(open){
+	if(open){
+		kkutuPersonalAudioRender();
+		kkutuPersonalAudioSetMessage("동일한 파일명의 MP3만 자동 등록합니다. 하위 폴더도 지원합니다. 파일은 서버로 전송되지 않습니다.", false);
+	}
+	$("#personal-audio-overlay").toggle(!!open);
+}
+function kkutuPersonalAudioInitUI(){
+	if(!$("#personal-audio-open").length || $("#personal-audio-overlay").length) return;
+	var css = ''+
+		'#personal-audio-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:999999;align-items:center;justify-content:center;padding:12px;box-sizing:border-box;}'+
+		'#personal-audio-panel{box-sizing:border-box;width: min(94vw,540px);max-height:85vh;display:flex;flex-direction:column;background:#f7f8fc;color:#20232a;border:1px solid #d5d8e1;border-radius:12px;box-shadow:0 16px 48px rgba(0,0,0,.4);font-family:inherit;}'+
+		/* 끄투 style.css 와 m_style.css 의 전역 span{display:none} 규칙을 모달 내부에서만 해제 */
+		'#personal-audio-panel span{display:inline-block;}'+
+		'#personal-audio-panel .kkutu-personal-audio-track-name{display:block;}'+
+		'#personal-audio-panel .kkutu-personal-audio-track-state{display:block;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}'+
+		'#personal-audio-panel .kkutu-personal-audio-header{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid #d5d8e1;font-size:17px;font-weight:700;}'+
+		'#personal-audio-panel .kkutu-personal-audio-actions{display:flex;flex-wrap:wrap;gap:7px;padding:12px 16px;}'+
+		'#personal-audio-panel button{cursor:pointer;min-height:30px;padding:5px 10px;border:1px solid #b3bed3;border-radius:6px;background:#fff;color:#252f41;}'+
+		'#personal-audio-panel button:hover{background:#e8edf7;}'+
+		'#personal-audio-panel #personal-audio-status{padding:0 16px 8px;line-height:1.4;font-size:12px;white-space:pre-line;}'+
+		'#personal-audio-panel #personal-audio-count{font-size:12px;color:#5a6070;margin:0 16px 5px;}'+
+		'#personal-audio-list{overflow-y:auto;margin:5px 16px 16px;min-height:90px;border:1px solid #dfe4eb;border-radius:7px;background:#fff;}'+
+		'#personal-audio-list .kkutu-personal-audio-track{display:flex;align-items:center;gap:6px;padding:5px 9px;border-bottom:1px solid #eee;font-size:12px;}'+
+		'#personal-audio-list .kkutu-personal-audio-track:last-child{border-bottom:0;}'+
+		'#personal-audio-list .kkutu-personal-audio-track-name{width:142px;min-width:95px;flex-shrink:0;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}'+
+		'#personal-audio-list .kkutu-personal-audio-track-state{flex:1;color:#5f6a79;}'+
+		'#personal-audio-list button{min-height:22px;padding:1px 6px;}';
+	$("<style>").attr("id","personal-audio-style").text(css).appendTo("head");
+	var $overlay = $("<div>").attr("id","personal-audio-overlay");
+	var $panel = $("<div>").attr({id:"personal-audio-panel",role:"dialog","aria-modal":"true","aria-label":"개인 음원 업로드"});
+	var $head = $("<div>").addClass("kkutu-personal-audio-header").append($("<span>").text("BGM · 효과음 업로드"),$("<button>").attr({id:"personal-audio-close",type:"button","aria-label":"닫기"}).text("×"));
+	var $actions = $("<div>").addClass("kkutu-personal-audio-actions");
+	$actions.append(
+		$("<button>").attr({id:"personal-audio-select-files",type:"button"}).text("음원 파일 선택"),
+		$("<button>").attr({id:"personal-audio-select-folder",type:"button"}).text("폴더 일괄 등록"),
+		$("<button>").attr({id:"personal-audio-reset-all",type:"button"}).text("전체 기본 복원")
+	);
+	var $file = $("<input>").attr({id:"personal-audio-files",type:"file",accept:".mp3,audio/mpeg",multiple:"multiple"}).css("display","none");
+	var $folder = $("<input>").attr({id:"personal-audio-folder",type:"file",multiple:"multiple",webkitdirectory:"",directory:""}).css("display","none");
+	$panel.append($head,$actions,$file,$folder,$("<div>").attr("id","personal-audio-status"),$("<div>").attr("id","personal-audio-count"),$("<div>").attr("id","personal-audio-list"));
+	$("body").append($overlay.append($panel));
+	$overlay.css("display","none");
+	$("#personal-audio-open").on("click",function(){ kkutuPersonalAudioShow(true); $("#personal-audio-overlay").css("display","flex"); });
+	$("#personal-audio-close").on("click",function(){ kkutuPersonalAudioShow(false); });
+	$overlay.on("click",function(e){ if(e.target === $overlay[0]) kkutuPersonalAudioShow(false); });
+	$("#personal-audio-select-files").on("click",function(){ $file.trigger("click"); });
+	$("#personal-audio-select-folder").on("click",function(){ $folder.trigger("click"); });
+	$file.on("change",function(){ kkutuPersonalAudioImport(this.files,false); this.value=""; });
+	$folder.on("change",function(){ kkutuPersonalAudioImport(this.files,true); this.value=""; });
+	$("#personal-audio-reset-all").on("click",kkutuPersonalAudioResetAll);
+	$("#personal-audio-list").on("click","[data-audio-reset]",function(){ kkutuPersonalAudioReset($(this).attr("data-audio-reset")); });
+	$(document).on("keydown",function(e){ if(e.key === "Escape" && $overlay.is(":visible")) kkutuPersonalAudioShow(false); });
+}
+
 
 
 /**
@@ -706,7 +926,9 @@ $(document).ready(function(){
 			kkutuActivateSoundPack($data.soundPack, false);
 			// 개인 로비 BGM도 접속 전에 IndexedDB에서 불러와 준비한다.
 			kkutuLoadPersonalLobbyBgm(function(){
-				processShop(connect);
+				kkutuLoadPersonalAudio(function(){
+					processShop(connect);
+				});
 			});
 		});
 	});
@@ -1215,7 +1437,9 @@ $(document).ready(function(){
 	$("#sound-pack").on('change', function(){
 		kkutuPreviewSoundPackFromUI();
 	});
-	// 개인 로비 BGM: 파일은 서버로 전송하지 않고 이 브라우저의 IndexedDB에만 저장한다.
+	// 설정의 버튼에서 개인 음원 관리 UI를 별도 모달로 연다.
+	kkutuPersonalAudioInitUI();
+	// 기존 개인 로비 BGM과 브라우저 저장 데이터를 계속 지원한다.
 	$("#personal-lobby-bgm-select").on('click', function(){
 		$("#personal-lobby-bgm-file").trigger('click');
 	});
@@ -5281,7 +5505,7 @@ function playSound(key, loop){
 	var src, sound, gain;
 	var volume = kkutuSoundVolume(!!loop);
 
-	sound = $sound[key] || $sound.missing;
+	sound = $personalAudioSounds[key] || $sound[key] || $sound.missing;
 	if(window.hasOwnProperty("AudioBuffer") && sound instanceof AudioBuffer){
 		src = audioContext.createBufferSource();
 		gain = audioContext.createGain();

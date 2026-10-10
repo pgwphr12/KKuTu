@@ -57,7 +57,7 @@ const MODE_LENGTH = Master.MODE_LENGTH;
 /* Chat link blocking [S] */
 function isAllowedChatHost(host){
 	host = String(host || "").toLowerCase().replace(/\.$/, "");
-	var allowed = [ "kkutugame.kr", "parkeolru.com", "kkutu.pe.kr" ];
+	var allowed = [ "kkutugame.kr", "kkutu.pe.kr" ].concat((process.env.KKUTU_CHAT_ALLOWED_HOSTS || "").toLowerCase().split(",").map(function(v){return v.trim();}).filter(Boolean));
 	for(var i=0; i<allowed.length; i++){
 		if(host === allowed[i] || host.slice(-(allowed[i].length + 1)) === "." + allowed[i]) return true;
 	}
@@ -212,6 +212,7 @@ Server.on('connection', function(socket, info){
 	}
 	MainDB.session.findOne([ '_id', key ]).limit([ 'profile', true ]).on(function($body){
 		$c = new KKuTu.Client(socket, $body ? $body.profile : null, key);
+		if($c.guest){$c.sendError(402);$c.socket.close();return;} // Pearl allows signed-in members only.
 		$c.admin = GLOBAL.ADMIN.indexOf($c.id) != -1;
 		
 		/* Enhanced User Block System [S] */

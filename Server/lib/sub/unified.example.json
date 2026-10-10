@@ -1,0 +1,12 @@
+{
+  "enabled": false,
+  "role": "client",
+  "issuer": "your-server-name",
+  "audience": "other-server-name",
+  "authorityOrigin": "https://example.com",
+  "peerOrigin": "https://peer.example.com",
+  "serverIndex": 1,
+  "capacity": 10,
+  "secretEnv": "KKUTU_UNIFIED_SECRET",
+  "sharedKey": ""
+}

@@ -66,15 +66,19 @@ JLog.info("<< KKuTu Web >>");
 Server.set('views', __dirname + "/views");
 Server.set('view engine', "pug");
 // Cloudflare/WAF: trust X-Forwarded-Proto so req.protocol reflects the visitor-facing HTTPS connection.
-Server.set("trust proxy", true);
+Server.set("trust proxy", process.env.KKUTU_TRUST_PROXY === "1" ? 1 : false);
 Server.use(function(req, res, next){
-	if(Const.WAF && req.headers['cf-connecting-ip']){
+	if(Const.WAF && process.env.KKUTU_TRUST_CF_IP_HEADER === "1" && req.headers['cf-connecting-ip']){
 		Object.defineProperty(req, 'ip', { value: req.headers['cf-connecting-ip'], configurable: true });
 	}
 	next();
 });
 Server.use(Express.static(__dirname + "/public"));
 Server.use(Parser.urlencoded({ extended: true }));
+// Use a deployment-specific session secret. Without one, generate an ephemeral strong secret.
+// Set KKUTU_SESSION_SECRET in production so sessions survive restarts.
+var KKUTU_SESSION_SECRET = process.env.KKUTU_SESSION_SECRET || require('crypto').randomBytes(48).toString('hex');
+if(!process.env.KKUTU_SESSION_SECRET) console.warn('[KKuTu] KKUTU_SESSION_SECRET is unset: using an ephemeral secret.');
 Server.use(Exession({
 	/* use only for redis-installed
 
@@ -82,7 +86,7 @@ Server.use(Exession({
 		client: Redis.createClient(),
 		ttl: 3600 * 12
 	}),*/
-	secret: 'kkutu',
+	secret: KKUTU_SESSION_SECRET,
 	resave: false,
 	saveUninitialized: true
 }));
@@ -270,6 +274,7 @@ function attachWafGateway(edgeServer){
 	});
 }
 
+require('./unified-server').install(Server, DB, {});
 ROUTES.forEach(function(v){
 	require(`./routes/${v}`).run(Server, WebInit.page);
 });
@@ -295,15 +300,16 @@ Server.get("/", function(req, res){
 		if(global.isPublic){
 			onFinish($ses);
 		}else{
-			if($ses) $ses.profile.sid = $ses._id;
+			if($ses && $ses.profile) $ses.profile.sid = $ses._id;
 			onFinish($ses);
 		}
 	});
 
 	function onFinish($doc){
 		var id = req.session.id;
-		var authenticated = !!($doc && $doc.profile && $doc.profile.id);
-		var loginRequired = false;
+		var authenticated = !!($doc && $doc.profile && $doc.profile.id && !$doc.profile.guest && !$doc.profile.federationGuest && !/^guest:/.test($doc.profile.id));
+		var loginRequired = wantsGame && !authenticated;
+		if(loginRequired) return res.redirect(303, "/login");
 
 		if(authenticated){
 			$doc.profile.sid = req.session.id;
@@ -312,15 +318,11 @@ Server.get("/", function(req, res){
 		}else{
 			delete req.session.profile;
 
-			// 비로그인 상태에서 게임 서버 진입을 시도하면
-			// 메인 포털을 다시 렌더링하지 않고 로그인 페이지로 보낸다.
-			if(wantsGame){
-				return res.redirect('/login');
-			}
+			// The game master already assigns a guest identity to this session.
 		}
 
 		// 로그인 사용자는 정상적으로 kkutu 화면을 렌더링한다.
-		page(req, res, (wantsGame && authenticated) ? "kkutu" : "portal", {
+		page(req, res, wantsGame ? "kkutu" : "portal", {
 			'_page': "kkutu",
 			'loginRequired': loginRequired,
 			'authenticated': authenticated,
@@ -342,8 +344,8 @@ Server.get("/", function(req, res){
 			'KO_THEME': Const.KO_THEME,
 			'EN_THEME': Const.EN_THEME,
 			'IJP_EXCEPT': Const.IJP_EXCEPT,
-			'ogImage': "http://kkutu.parkeolru.com/img/kkutu/logo.png",
-			'ogURL': "http://kkutu.parkeolru.com/",
+			'ogImage': (process.env.KKUTU_PUBLIC_URL || "https://example.com")+"/img/kkutu/logo.png",
+			'ogURL': (process.env.KKUTU_PUBLIC_URL || "https://example.com")+"/",
 			'ogTitle': "글자로 놀자! 파얼끄투",
 			'ogDescription': "끝말잇기가 이렇게 박진감 넘치는 게임이었다니!"
 		});

@@ -1,0 +1,43 @@
+{
+  "ADMIN": [],
+  "MAIN_PORTS": [
+    8880
+  ],
+  "ROOM_PORTS": [
+    9296
+  ],
+  "GAME_SERVER_HOST": "127.0.0.1",
+  "KKUTUHOT_PATH": "",
+  "PASS": "",
+  "PG_HOST": "127.0.0.1",
+  "PG_USER": "postgres",
+  "PG_PASSWORD": "",
+  "PG_PORT": 5432,
+  "PG_DATABASE": "main",
+  "GOOGLE_RECAPTCHA_TO_GUEST": false,
+  "GOOGLE_RECAPTCHA_TO_USER": false,
+  "GOOGLE_RECAPTCHA_SITE_KEY": "",
+  "GOOGLE_RECAPTCHA_SECRET_KEY": "",
+  "WAF": false,
+  "IS_SECURED": false,
+  "SSL_OPTIONS": {
+    "PRIVKEY": "",
+    "CERT": "",
+    "CA": "",
+    "PFX": "",
+    "isPFX": false,
+    "isCA": false
+  },
+  "USER_BLOCK_OPTIONS": {
+    "USE_MODULE": false,
+    "USE_X_FORWARDED_FOR": false,
+    "BLOCK_IP_ONLY_FOR_GUEST": true,
+    "DEFAULT_BLOCKED_TEXT": "관리자에 의해 서비스 이용이 제한되었습니다.",
+    "BLOCKED_FOREVER": "영구 이용제한"
+  },
+  "MASTER_PORTS": [
+    8880
+  ],
+  "WAF_GATEWAY": false,
+  "EDGE_PORT": 443
+}

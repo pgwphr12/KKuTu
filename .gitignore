@@ -1,22 +1,31 @@
-Client/node_modules
-Server/run.bat
-Server/node_modules
-Server/lib/node_modules
-Server/lib/Web/public/js/**
-!Server/lib/Web/public/js/jquery.js
+# Install artifacts
+**/node_modules/
+.vscode/
+.idea/
+
+# Credentials and deployment configs: use *.example.json instead
 Server/lib/sub/auth.json
 Server/lib/sub/global.json
-.vscode
-
-# Private/local configuration and credentials
-ssl/
+Server/lib/sub/unified.json
+Server/lib/sub/*복사본*
 .env
 .env.*
+!*.env.example
+ssl/*
+!ssl/.gitkeep
 *.pem
-*.key
-*.pfx
 *.p12
+*.pfx
+*.key
+*.crt
 
-# Local runtime artifacts
-KKUTU_ERROR.log
+# Runtime/backup data
+*.log
+*.bak
+*.backup
+*.swp
+*.tmp
+Server/run.bat
 Server/lib/Web/public/roblox-oauth-review.mp4
+
+# Do not ignore built public/js: it contains custom sound-upload logic

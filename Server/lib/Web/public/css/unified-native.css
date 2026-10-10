@@ -1,0 +1,23 @@
+/* Keep Pearl's native layout and add the integrated game controls. */
+html.unified-peer :is(#QuickRoomBtn,#LeaderboardBtn,#ShopBtn,#DressBtn){display:none!important}
+#unified-wordbook-row,#unified-shield-row{width:100%;height:auto!important;box-sizing:border-box;padding:4px 8px;clear:both}
+#unified-wordbook-row label,#unified-shield-row label{display:block;margin-bottom:4px}
+#unified-shield-row small{display:block;font-size:11px;margin:4px 0}
+#room-wordbook{width:70%}#room-shield{width:70px}
+#ShieldStatus{clear:both;font-size:13px;text-align:center;padding:4px;color:#253e29}
+#TurnHint{clear:both;min-height:25px;text-align:center}#TurnHint button{margin:2px;padding:3px 6px}#TurnHint .hint-used{opacity:.5}
+html.unified-peer .GameBox .game-head{height:auto!important;min-height:250px;padding-bottom:8px;overflow:visible}
+html.unified-peer .GameBox .game-input{box-sizing:border-box;position:relative;padding:5px;min-height:40px;height:auto!important;background:#b4e7b7}
+html.unified-peer .GameBox .game-input[data-mode="hint"]{background:#ffcde7}
+html.unified-peer .GameBox .game-input[data-mode="prediction"]{background:#ffe58b}
+html.unified-peer #game-input{box-sizing:border-box;width:calc(100% - 65px)!important;color:#222}
+#UnifiedWordSubmit{width:60px;margin-left:4px}#DraftStatus{clear:both;font-size:12px}
+.unified-wordbook-detail{width:420px;max-width:90vw;height:440px;max-height:85vh}.unified-wordbook-detail .dialog-head button{float:right}.unified-word-list{height:320px;overflow:auto}.unified-word-list p{margin:3px 0}
+
+html.unified-peer .GameBox{height:auto!important;min-height:410px;overflow:visible}
+html.unified-peer .GameBox .game-head{width:100%;float:none!important;overflow:auto;min-height:200px}
+html.unified-peer .GameBox .game-input{top:0!important;left:0!important;float:none!important;clear:both;width:500px;max-width:100%;margin:0 auto 8px}
+html.unified-peer .GameBox .game-body{clear:both;width:100%;height:auto!important;min-height:180px}
+#ShieldStatus,#TurnHint{width:100%;float:none!important}#TurnHint button{float:none}#DraftStatus{float:none!important}
+
+html.unified-peer .GameBox .game-input{flex-wrap:wrap;align-items:center;gap:4px}html.unified-peer #game-input{width:auto!important;flex:1;min-width:0}#UnifiedWordSubmit{flex:0 0 60px;margin:0}#DraftStatus{flex:0 0 100%}

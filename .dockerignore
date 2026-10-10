@@ -1,3 +1,9 @@
-/Server/lib/sub
-/docker-compose.yml
-/Dockerfile
+# Keep the application source (including Server/lib/sub/*.js) in Docker builds
+**/node_modules/
+**/*.log
+/ssl/
+/Server/lib/sub/auth.json
+/Server/lib/sub/global.json
+/Server/lib/sub/unified.json
+.env
+.env.*

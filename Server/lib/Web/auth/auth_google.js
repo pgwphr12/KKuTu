@@ -1,31 +1,37 @@
 const config = require('../../sub/auth.json');
 
 module.exports.config = {
-    strategy: require('passport-google-oauth2').Strategy,
+    strategy: require('passport-google-oauth20').Strategy,
     color: '#FFFFFF',
     fontColor: '#000000',
     vendor: 'google',
     displayName: 'withGoogle'
-}
+};
 
 module.exports.strategyConfig = {
-    clientID: config.google.clientID, // 보안을 위해서입니다.
-    clientSecret: config.google.clientSecret, // 이 방법을 사용하는 것을
-    callbackURL: config.google.callbackURL, // 적극 권장합니다.
+    clientID: config.google.clientID,
+    clientSecret: config.google.clientSecret,
+    callbackURL: config.google.callbackURL,
     passReqToCallback: true,
-    scope: ['profile', 'email', 'https://www.googleapis.com/auth/plus.login']
-}
+    scope: ['openid', 'profile', 'email']
+};
 
 module.exports.strategy = (process, MainDB, Ajae) => {
     return (req, accessToken, refreshToken, profile, done) => {
         const $p = {};
 
-        $p.authType = "google";
+        $p.authType = 'google';
         $p.id = profile.id;
-        $p.name = (profile.name.familyName ? profile.name.familyName + ' ' : '') + profile.name.givenName;
-        $p.title = profile.nickname;
-        $p.image = profile.photos[0].value;
+
+        const name = profile.name || {};
+        $p.name = [
+            name.familyName,
+            name.givenName
+        ].filter(Boolean).join(' ') || profile.displayName || 'Google User';
+
+        $p.title = profile.nickname || profile.displayName || $p.name;
+        $p.image = profile.photos?.[0]?.value || '';
 
         process(req, accessToken, MainDB, $p, done);
-    }
-}
+    };
+};

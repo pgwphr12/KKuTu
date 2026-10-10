@@ -1,0 +1,25 @@
+/* Pearl's native theme with compatibility for the shared game protocol DOM. */
+html.unified-peer body{min-width:640px}
+html.unified-peer #Middle{position:relative;width:1000px;margin:20px auto}
+html.unified-peer :is(#LobbyHero,#LobbySocialDock #MobileSocialToggle,#GuestNameEntry,.room-stage-actions,.account-actions,#game-entry-notice,#custom-ui-settings,#CustomUIToolbar){display:none!important}
+html.unified-peer #LobbySocialDock{display:contents}
+html.unified-peer :is(.RoomListBox,.RoomBox,.GameBox){width:1000px;box-sizing:border-box}
+html.unified-peer .RoomListBox>.product-body{height:360px;overflow:auto}
+html.unified-peer .UserListBox{float:right;width:190px}
+html.unified-peer .ChatBox{float:left;width:790px}
+html.unified-peer .room-head-identity,html.unified-peer .room-head-details{display:inline}
+html.unified-peer .room-head-brand,html.unified-peer .room-lobby-heading{display:none}
+html.unified-peer .RoomBox .room-stage-content{height:300px}
+html.unified-peer .room-user-empty{float:left;width:120px;height:145px;display:grid;place-items:center;color:#6b7568;font-size:45px}
+html.unified-peer .room-users{display:block}
+html.unified-peer .Product>.product-title{min-height:30px;height:auto}
+html.unified-peer .game-input{display:flex;gap:4px}
+html.unified-peer #game-input{flex:1;min-width:0}
+html.unified-peer #GameWordSubmit{width:70px;flex-shrink:0}
+html.unified-peer #TurnHint{clear:both;display:flex;gap:5px}
+html.unified-peer #TurnHint:empty{display:none}
+html.unified-peer :is(#WordMeaning,#ActiveWordbooks,#ShieldStatus){font-size:13px;background:var(--pe-surface,#f1f5ee);color:var(--pe-text,#293327);border:1px solid var(--pe-border,#ccd8c7);padding:8px;box-sizing:border-box}
+html.unified-peer #ActiveWordbooks{position:fixed;left:8px;bottom:8px;max-width:180px}
+html.unified-peer #ActiveWordbooks strong,html.unified-peer #ActiveWordbooks span{display:block}
+html.unified-peer .word-meaning-label,html.unified-peer .word-meaning-word,html.unified-peer .word-meaning-definition{display:block}
+@media(max-width:1020px){html.unified-peer #Middle{width:calc(100% - 16px)}html.unified-peer :is(.RoomListBox,.RoomBox,.GameBox){width:100%}}

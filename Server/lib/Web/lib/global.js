@@ -118,7 +118,7 @@ var L;
 			if($("#quick-search-btn").hasClass("searching")) return;
 			if(v = $(".autocomp-select").html()) $("#quick-search-tf").val(v);
 			$("#quick-search-btn").addClass("searching").html($("<i>").addClass("fa fa-spin fa-spinner"));
-			location.href = "http://parkeolru.com" + encodeURI($("#quick-search-tf").val());
+			location.href = (window.KKUTU_SEARCH_BASE_URL || "https://example.com/") + encodeURIComponent($("#quick-search-tf").val());
 		}).hotkey($("#quick-search-tf"), 13);
 	
 	// 계정

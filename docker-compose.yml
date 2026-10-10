@@ -29,12 +29,11 @@ services:
       context: .
       dockerfile: ./psql.Dockerfile
     environment:
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_PASSWORD: ${KKUTU_DB_PASSWORD:?Set KKUTU_DB_PASSWORD in .env (never commit it)}
       POSTGRES_DB: main
     volumes:
       - db_data:/var/lib/postgresql/data
-    ports:
-      - 5432:5432
+    # Map port 5432 explicitly only if an external database client is required.
 
 volumes:
   kkutu_data:

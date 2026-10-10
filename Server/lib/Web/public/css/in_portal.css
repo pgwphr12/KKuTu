@@ -53,6 +53,12 @@
 	border-bottom-right-radius: inherit;
 }
 	#game-start:hover{ font-size: 24px; background-color: rgba(0, 0, 0, 0.5); }
+.unified-entry-card{clear:both;display:flex;align-items:center;gap:10px;width:100%;min-height:64px;height:auto;box-sizing:border-box;padding:10px;border-top:1px solid #ffffff40;background:#ffffff10;color:#fff}
+.unified-entry-card .server-choice-copy{flex:1;min-width:0;float:none}
+.unified-entry-card strong{display:block;font-size:15px}
+.unified-entry-card p{margin:4px 0 0;line-height:1.4;font-size:12px;overflow-wrap:anywhere}
+.unified-entry-card button{flex:0 0 54px;height:34px;border:0;border-radius:5px;background:#5e9850;color:#fff;cursor:pointer}
+.unified-entry-card button:disabled{opacity:.5;cursor:default}
 .server-list-box{
 	float: right;
 	width: 320px;

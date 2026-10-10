@@ -20,6 +20,10 @@
 	var $stage;
 	var LIMIT = 400;
 	var LIST;
+	function isLoggedIn(){
+		return $("#portal-authenticated").text() === "1";
+	}
+
 
 	$(document).ready(function(){
 		$stage = {
@@ -34,27 +38,33 @@
 			'background-image': "url(/img/kkutu/gamebg.png)",
 			'background-size': "200px 200px"
 		});
-		function isLoggedIn(){
-			// 현재 페이지를 만든 서버의 인증 판정을 그대로 사용한다.
-			return $("#portal-authenticated").text() === "1";
-		}
 
-		$stage.start.prop('disabled', true).on('click', function(e){
-			var i, j;
+
+		// 로그인 직후 /servers 응답이 늦거나 일시적으로 실패해도 버튼 자체를
+		// disabled 상태로 고정하지 않는다. 실제 접속 가능 서버는 클릭 시 판정한다.
+		$stage.start.prop('disabled', false).on('click', function(e){
+			var i, j, count;
 
 			e.preventDefault();
-			if(!isLoggedIn()){
-				window.location.assign("/login");
+			if(!isLoggedIn()){window.location.assign("/login");return false;}
+			if(!Array.isArray(LIST)){
+				alert(L['serverWait'] || '서버 목록을 불러오는 중입니다. 잠시 후 다시 시도해 주세요.');
+				seekServers();
 				return false;
 			}
 			for(i=0.9; i<1; i+=0.01){
-				for(j in LIST){
-					if(LIST[j] < i * LIMIT){
-						$("#server-" + j).trigger('click');
-						return;
+				for(j=0; j<LIST.length; j++){
+					count = LIST[j];
+					// JSON의 null(오프라인)을 0명 서버로 잘못 선택하지 않는다.
+					if(typeof count === 'number' && isFinite(count) && count >= 0 && count < i * LIMIT){
+						window.location.assign("/?server=" + j);
+						return false;
 					}
 				}
 			}
+			alert(L['serverWait'] || '현재 접속 가능한 게임 서버가 없습니다. 잠시 후 다시 시도해 주세요.');
+			seekServers();
+			return false;
 		});
 		$stage.ref.on('click', function(e){
 			if($stage.refi.hasClass("fa-spin")){
@@ -99,14 +109,16 @@
 				);
 				if (status != "x") $e.on('click', function (e) {
 					e.preventDefault();
-					if(!isLoggedIn()){
-						window.location.assign("/login");
-						return false;
-					}
+					if(!isLoggedIn()){window.location.assign("/login");return false;}
 					window.location.assign("/?server=" + i);
 				}); else $e.children(".server-enter").html("-");
 			});
 			$stage.total.html("&nbsp;" + L['TOTAL'] + " " + sum + L['MN']);
+			$stage.refi.removeClass("fa-spin");
+			$stage.start.prop('disabled', false);
+		}).fail(function(){
+			// 네트워크/서버 상태 조회 실패가 게임 시작 버튼 잠금으로 이어지지 않게 한다.
+			LIST = null;
 			$stage.refi.removeClass("fa-spin");
 			$stage.start.prop('disabled', false);
 		});
